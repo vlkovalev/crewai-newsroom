@@ -22,10 +22,10 @@ OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', '')
 
 # Check if OpenAI API key is set
 if not OPENAI_API_KEY:
-    print("❌ ERROR: OPENAI_API_KEY environment variable is not set!")
+    print("ERROR: OPENAI_API_KEY environment variable is not set!")
     exit(1)
 
-print("✅ OpenAI API key found")
+print("OpenAI API key found")
 
 # ============================================
 # Weather Data (Simulated - Replace with API)
@@ -113,10 +113,10 @@ def get_photo_gallery():
     # - Community submissions
     
     gallery = [
-        {"title": "Spring Festival Celebration", "caption": "Residents enjoy the annual Spring Festival", "placeholder": "🎉 Community Event", "image_url": "https://via.placeholder.com/800x400/2C5F2D/ffffff?text=Spring+Festival"},
-        {"title": "New Business Opening", "caption": "Main Street's newest local shop", "placeholder": "🏪 Local Business", "image_url": "https://via.placeholder.com/800x400/4A7C4B/ffffff?text=New+Business"},
-        {"title": "Youth Sports Action", "caption": "Local soccer team in tournament play", "placeholder":":"⚽ Youth Sports", "image_url": "https://via.placeholder.com/800x400/2C5F2D/ffffff?text=Youth+Sports"},
-        {"title": "Community Volunteers", "caption": "Volunteers cleaning up the park", "placeholder": "🤝 Community Spirit", "image_url": "https://via.placeholder.com/800x400/4A7C4B/ffffff?text=Volunteers"}
+        {"title": "Spring Festival Celebration", "caption": "Residents enjoy the annual Spring Festival", "placeholder": "Community Event", "image_url": "https://via.placeholder.com/800x400/2C5F2D/ffffff?text=Spring+Festival"},
+        {"title": "New Business Opening", "caption": "Main Street's newest local shop", "placeholder": "Local Business", "image_url": "https://via.placeholder.com/800x400/4A7C4B/ffffff?text=New+Business"},
+        {"title": "Youth Sports Action", "caption": "Local soccer team in tournament play", "placeholder": "Youth Sports", "image_url": "https://via.placeholder.com/800x400/2C5F2D/ffffff?text=Youth+Sports"},
+        {"title": "Community Volunteers", "caption": "Volunteers cleaning up the park", "placeholder": "Community Spirit", "image_url": "https://via.placeholder.com/800x400/4A7C4B/ffffff?text=Volunteers"}
     ]
     return gallery
 
@@ -150,7 +150,7 @@ Style Rules:
 # Create AI Agents
 # ============================================
 
-print("🤖 Creating AI agents...")
+print("Creating AI agents...")
 
 researcher = Agent(
     role="Local News Researcher",
@@ -198,13 +198,13 @@ headline_writer = Agent(
     allow_delegation=False
 )
 
-print("✅ 5 Agents created")
+print("5 Agents created")
 
 # ============================================
 # Define Tasks
 # ============================================
 
-print("📋 Creating tasks...")
+print("Creating tasks...")
 
 research_task = Task(
     description=f"""Research local news for {datetime.now().strftime('%B %d, %Y')}.
@@ -256,7 +256,7 @@ headline_task = Task(
     expected_output="3 headline options with best one selected."
 )
 
-print("✅ 5 Tasks created")
+print("5 Tasks created")
 
 # ============================================
 # HTML Template Builder
@@ -273,16 +273,16 @@ def build_complete_html(news_content, weather, events, letter, gallery):
     social_links = f"""
     <div class="social-share">
         <h4>Share this edition:</h4>
-        <a href="https://www.facebook.com/sharer/sharer.php?u={encoded_url}" target="_blank" class="social-btn facebook">📘 Facebook</a>
-        <a href="https://twitter.com/intent/tweet?text={encoded_title}&url={encoded_url}" target="_blank" class="social-btn twitter">🐦 Twitter</a>
-        <a href="mailto:?subject={encoded_title}&body=Check out this week's Spruce Grove Gazette: {encoded_url}" class="social-btn email">📧 Email</a>
+        <a href="https://www.facebook.com/sharer/sharer.php?u={encoded_url}" target="_blank" class="social-btn facebook">Facebook</a>
+        <a href="https://twitter.com/intent/tweet?text={encoded_title}&url={encoded_url}" target="_blank" class="social-btn twitter">Twitter</a>
+        <a href="mailto:?subject={encoded_title}&body=Check out this week's Spruce Grove Gazette: {encoded_url}" class="social-btn email">Email</a>
     </div>
     """
     
     # Weather section
     weather_html = f"""
     <div class="weather-section">
-        <h3>☀️ Spruce Grove Weather</h3>
+        <h3>Spruce Grove Weather</h3>
         <div class="current-weather">
             <span class="temp">{weather['current']['temperature']}°C</span>
             <span class="condition">{weather['current']['condition']}</span>
@@ -297,14 +297,14 @@ def build_complete_html(news_content, weather, events, letter, gallery):
     # Events calendar
     events_html = f"""
     <div class="events-section">
-        <h3>📅 Upcoming Events</h3>
+        <h3>Upcoming Events</h3>
         <div class="events-list">
             {"".join([f'''
             <div class="event-item">
                 <div class="event-date">{event["date"]}</div>
                 <div class="event-details">
                     <strong>{event["name"]}</strong><br>
-                    🕐 {event["time"]} | 📍 {event["location"]}<br>
+                    Time: {event["time"]} | Location: {event["location"]}<br>
                     <em>{event["description"]}</em>
                 </div>
             </div>
@@ -316,21 +316,21 @@ def build_complete_html(news_content, weather, events, letter, gallery):
     # Letter to editor
     letter_html = f"""
     <div class="letter-section">
-        <h3>✉️ Letter to the Editor</h3>
+        <h3>Letter to the Editor</h3>
         <div class="letter">
             <div class="letter-subject"><strong>Subject:</strong> {letter['subject']}</div>
             <div class="letter-content">"{letter['content']}"</div>
             <div class="letter-author">— {letter['author']}</div>
-            <div class="letter-date">📅 {letter['date']}</div>
+            <div class="letter-date">Date: {letter['date']}</div>
         </div>
-        <p class="submit-letter"><a href="#">✍️ Submit your letter to the editor →</a></p>
+        <p class="submit-letter"><a href="#">Submit your letter to the editor →</a></p>
     </div>
     """
     
     # Photo gallery
     gallery_html = f"""
     <div class="gallery-section">
-        <h3>📸 Spruce Grove in Photos</h3>
+        <h3>Spruce Grove in Photos</h3>
         <div class="photo-gallery">
             {"".join([f'''
             <div class="gallery-item">
@@ -342,7 +342,7 @@ def build_complete_html(news_content, weather, events, letter, gallery):
             </div>
             ''' for photo in gallery])}
         </div>
-        <p class="photo-credit">📷 Share your photos: photos@sprucegrovegazette.com</p>
+        <p class="photo-credit">Share your photos: photos@sprucegrovegazette.com</p>
     </div>
     """
     
@@ -430,9 +430,9 @@ def build_complete_html(news_content, weather, events, letter, gallery):
 <body>
     <div class="container">
         <div class="header">
-            <h1>📰 Spruce Grove Gazette</h1>
+            <h1>Spruce Grove Gazette</h1>
             <p>Your Hometown, Online | Established 1950</p>
-            <div class="date">📍 Spruce Grove, AB | 📅 {datetime.now().strftime('%B %d, %Y')}</div>
+            <div class="date">Spruce Grove, AB | {datetime.now().strftime('%B %d, %Y')}</div>
         </div>
         
         <div class="nav">
@@ -462,17 +462,17 @@ def build_complete_html(news_content, weather, events, letter, gallery):
         </div>
         
         <div class="footer">
-            <p>📧 Contact: editor@sprucegrovegazette.com</p>
-            <p>📞 Phone: (780) 123-4567</p>
-            <p>📍 123 Main Street, Spruce Grove, AB</p>
+            <p>Email: editor@sprucegrovegazette.com</p>
+            <p>Phone: (780) 123-4567</p>
+            <p>123 Main Street, Spruce Grove, AB</p>
             <div style="margin-top: 20px;">
                 <a href="#">About Us</a> | 
                 <a href="#">Advertise</a> | 
                 <a href="#">Subscribe</a> | 
                 <a href="#">Contact</a>
             </div>
-            <p style="margin-top: 20px;">&copy; {datetime.now().year} Spruce Grove Gazette. All rights reserved.</p>
-            <p><small>🤖 Portions of this content generated by AI and reviewed by editorial staff</small></p>
+            <p style="margin-top: 20px;">Copyright {datetime.now().year} Spruce Grove Gazette. All rights reserved.</p>
+            <p><small>Portions of this content generated by AI and reviewed by editorial staff</small></p>
         </div>
     </div>
 </body>
@@ -490,32 +490,32 @@ news_crew = Crew(
 )
 
 print("\n" + "="*60)
-print("🤖 Spruce Grove Gazette - Complete AI Newsroom")
+print("Spruce Grove Gazette - Complete AI Newsroom")
 print("="*60)
-print(f"📅 Date: {datetime.now().strftime('%B %d, %Y')}")
-print(f"📍 Location: Spruce Grove, Alberta")
-print(f"📰 Sections: News | Sports | Business | Community")
-print(f"☀️ Weather | 📅 Events | ✉️ Letters | 📸 Gallery | 📱 Social")
+print(f"Date: {datetime.now().strftime('%B %d, %Y')}")
+print(f"Location: Spruce Grove, Alberta")
+print(f"Sections: News | Sports | Business | Community")
+print(f"Weather | Events | Letters | Gallery | Social")
 print("="*60)
-print("\n🚀 Generating complete newspaper edition...\n")
+print("\nGenerating complete newspaper edition...\n")
 
 # Get real-time data
-print("📡 Gathering real-time data...")
+print("Gathering real-time data...")
 weather_data = get_spruce_grove_weather()
 events_data = get_upcoming_events()
 letter_data = get_letter_to_editor()
 gallery_data = get_photo_gallery()
-print(f"✅ Weather: {weather_data['current']['temperature']}°C, {weather_data['current']['condition']}")
-print(f"✅ Events: {len(events_data)} upcoming")
-print(f"✅ Gallery: {len(gallery_data)} photos")
+print(f"Weather: {weather_data['current']['temperature']}°C, {weather_data['current']['condition']}")
+print(f"Events: {len(events_data)} upcoming")
+print(f"Gallery: {len(gallery_data)} photos")
 
 # Run the crew for news content
-print("\n🤖 AI agents writing news content...\n")
+print("\nAI agents writing news content...\n")
 result = news_crew.kickoff()
 article_html = str(result)
 
 # Build complete HTML page
-print("\n🎨 Building complete newspaper page...")
+print("\nBuilding complete newspaper page...")
 complete_html = build_complete_html(article_html, weather_data, events_data, letter_data, gallery_data)
 
 # Extract headline for title
@@ -528,29 +528,23 @@ with open(output_file, "w", encoding="utf-8") as f:
     f.write(complete_html)
 
 print("\n" + "="*60)
-print("📰 Complete Newspaper Edition Generated!")
+print("Complete Newspaper Edition Generated!")
 print("="*60)
-print(f"💾 Saved to: {output_file}")
-print(f"📊 File size: {len(complete_html):,} characters")
-print(f"🎨 Includes: Weather | Events | Letters | Gallery | Social Sharing")
+print(f"Saved to: {output_file}")
+print(f"File size: {len(complete_html):,} characters")
+print(f"Includes: Weather | Events | Letters | Gallery | Social Sharing")
 print("="*60)
 
 # Show preview of sections
-print("\n📋 Edition Contents:")
-print(f"   ☀️ Weather: {weather_data['current']['temperature']}°C, {weather_data['current']['condition']}")
-print(f"   📅 Events: {len(events_data)} local events")
-print(f"   ✉️ Letter from: {letter_data['author']}")
-print(f"   📸 Photos: {len(gallery_data)} community photos")
-print(f"   📱 Social: Facebook | Twitter | Email sharing")
-print(f"   📰 News: AI-generated local coverage")
+print("\nEdition Contents:")
+print(f"   Weather: {weather_data['current']['temperature']}°C, {weather_data['current']['condition']}")
+print(f"   Events: {len(events_data)} local events")
+print(f"   Letter from: {letter_data['author']}")
+print(f"   Photos: {len(gallery_data)} community photos")
+print(f"   Social: Facebook | Twitter | Email sharing")
+print(f"   News: AI-generated local coverage")
 
 print("\n" + "="*60)
-print("✅ Complete AI Newsroom session finished!")
-print("🎉 Spruce Grove Gazette is ready to publish!")
+print("Complete AI Newsroom session finished!")
+print("Spruce Grove Gazette is ready to publish!")
 print("="*60)
-
-# Optional: Open in browser (if running locally)
-if os.name == 'nt':  # Windows
-    os.system(f'start {output_file}')
-elif os.name == 'posix':  # Mac/Linux
-    os.system(f'open {output_file}')
