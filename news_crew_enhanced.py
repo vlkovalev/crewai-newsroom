@@ -12,11 +12,11 @@ import re
 import requests
 from datetime import datetime
 from crewai import Agent, Task, Crew, Process
+from crewai.tools import BaseTool, tool
 from langchain_community.tools import DuckDuckGoSearchRun
-from crewai.tools import BaseTool
+from dotenv import load_dotenv
 from typing import Type
 from pydantic import BaseModel, Field
-from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
