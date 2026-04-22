@@ -3,7 +3,6 @@ Spruce Grove Gazette - Enhanced AI Newsroom
 Features:
 - Multi-agent crew (Researcher, Writer, Fact-Checker, Editor, Headline Specialist)
 - Custom Gazette voice and style
-- AI image generation (DALL-E)
 - Auto-publish to Ghost CMS
 """
 
@@ -12,11 +11,8 @@ import re
 import requests
 from datetime import datetime
 from crewai import Agent, Task, Crew, Process
-from crewai.tools import BaseTool, tool
-from langchain_community.tools import DuckDuckGoSearchRun
 from dotenv import load_dotenv
-from typing import Type
-from pydantic import BaseModel, Field
+from langchain_community.tools import DuckDuckGoSearchRun
 
 # Load environment variables
 load_dotenv()
@@ -27,37 +23,23 @@ load_dotenv()
 
 GHOST_URL = os.environ.get('GHOST_URL', 'https://sprucegrovegazette-com.ghost.io')
 GHOST_ADMIN_API_KEY = os.environ.get('GHOST_ADMIN_API_KEY', '')
-
-# OpenAI API key for images (same as your OpenAI key)
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', '')
 
 # ============================================
-# AI Image Generation (DALL-E)
+# Simple Search Function (No BaseTool)
 # ============================================
 
-def generate_article_image(topic, title):
-    """Generate a feature image using DALL-E"""
+def search_spruce_grove(query):
+    """Simple search function for Spruce Grove news"""
+    search = DuckDuckGoSearchRun()
+    enhanced_query = f"Spruce Grove Alberta {query} local news community event"
     try:
-        import openai
-        openai.api_key = OPENAI_API_KEY
-        
-        # Create a prompt for the image
-        image_prompt = f"A professional, warm photograph for a small-town newspaper article about {topic} in Spruce Grove, Alberta. The image should be suitable for a community news website, with natural lighting and authentic local feel. Title: {title}"
-        
-        response = openai.images.generate(
-            model="dall-e-3",
-            prompt=image_prompt,
-            size="1024x1024",
-            quality="standard",
-            n=1
-        )
-        
-        image_url = response.data[0].url
-        print(f"   🖼️ Generated image: {image_url[:50]}...")
-        return image_url
+        result = search.invoke(enhanced_query)
+        return result if result else "No results found."
     except Exception as e:
-        print(f"   ⚠️ Image generation failed: {e}")
-        return "https://images.unsplash.com/photo-1585829365293-ab7cd400c167?w=1200&h=600&fit=crop"
+        return f"Search error: {str(e)}"
+
+print("✅ Search tool ready")
 
 # ============================================
 # Gazette Style Guide
@@ -96,32 +78,6 @@ Prohibited:
 """
 
 # ============================================
-# Search Tool Setup
-# ============================================
-
-search = DuckDuckGoSearchRun()
-
-class SpruceGroveSearchInput(BaseModel):
-    """Input for Spruce Grove search"""
-    query: str = Field(description="The search query for Spruce Grove news")
-
-class SpruceGroveSearchTool(BaseTool):
-    name: str = "Spruce Grove News Search"
-    description: str = "Search for local news, events, and information about Spruce Grove, Alberta"
-    args_schema: Type[BaseModel] = SpruceGroveSearchInput
-    
-    def _run(self, query: str) -> str:
-        enhanced_query = f"Spruce Grove Alberta {query} local news community event"
-        try:
-            result = search.invoke(enhanced_query)
-            return result if result else "No results found."
-        except Exception as e:
-            return f"Search error: {str(e)}"
-
-search_tool = SpruceGroveSearchTool()
-print("✅ Search tool created")
-
-# ============================================
 # Create Enhanced AI Agents
 # ============================================
 
@@ -132,7 +88,6 @@ researcher = Agent(
     backstory="""You are an experienced journalist who knows Spruce Grove, Alberta inside and out.
     You have deep connections in the community and know where to find reliable local information.
     You focus on stories that matter to residents: city council, schools, business, events, and development.""",
-    tools=[search_tool],
     verbose=True,
     allow_delegation=False
 )
@@ -185,17 +140,17 @@ headline_writer = Agent(
     allow_delegation=False
 )
 
-print("✅ 5 Agents created: Researcher, Fact-Checker, Writer, Editor, Headline Specialist")
+print("✅ 5 Agents created")
 
 # ============================================
 # Define Enhanced Tasks
 # ============================================
 
-# Task 1: Research
+# Task 1: Research (using the search function in description)
 research_task = Task(
     description=f"""Research current local news about Spruce Grove, Alberta for {datetime.now().strftime('%B %d, %Y')}.
 
-    Find 3-5 local news stories about:
+    Use the search function search_spruce_grove() to find news about:
     - Community events happening in the next 2 weeks
     - Local government decisions from recent council meetings
     - Business openings, expansions, or achievements
@@ -209,6 +164,8 @@ research_task = Task(
     - Who is involved (people, organizations)
     - Why it matters to residents
     - Sources (where you found the information)
+    
+    Search for: "community events", "city council", "new business", "school news", "development projects"
     """,
     agent=researcher,
     expected_output="A detailed research report with 3-5 local news stories including all key facts, dates, locations, and sources."
@@ -294,7 +251,7 @@ print("✅ 5 Tasks created")
 # Ghost Publishing Function
 # ============================================
 
-def publish_to_ghost(title, html_content, topic, feature_image=None):
+def publish_to_ghost(title, html_content, feature_image=None):
     """Publish article to Ghost CMS"""
     if not GHOST_ADMIN_API_KEY:
         print("⚠️ Ghost Admin API key not configured. Skipping auto-publish.")
@@ -365,17 +322,6 @@ article_html = str(result)
 title_match = re.search(r'<h2[^>]*>(.*?)</h2>', article_html)
 title = title_match.group(1) if title_match else "Spruce Grove Gazette Daily Dispatch"
 
-# Extract topic for image generation
-topic_match = re.search(r'community|event|council|school|business', article_html, re.IGNORECASE)
-topic = topic_match.group(0) if topic_match else "local news"
-
-print("\n" + "="*60)
-print("🎨 Generating feature image...")
-print("="*60)
-
-# Generate image
-feature_image = generate_article_image(topic, title)
-
 print("\n" + "="*60)
 print("📰 Final Article:")
 print("="*60)
@@ -395,37 +341,34 @@ with open(output_file, "w", encoding="utf-8") as f:
         body {{ font-family: Georgia, 'Times New Roman', serif; max-width: 800px; margin: 0 auto; padding: 20px; line-height: 1.6; color: #1a1a1a; }}
         h1, h2 {{ font-family: Georgia, serif; color: #2C5F2D; }}
         .meta {{ color: #666; font-size: 0.9em; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 20px; }}
-        img {{ max-width: 100%; height: auto; border-radius: 8px; margin: 20px 0; }}
-        blockquote {{ border-left: 4px solid #2C5F2D; margin: 20px 0; padding-left: 20px; font-style: italic; color: #555; }}
         .footer {{ margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee; font-size: 0.8em; color: #999; text-align: center; }}
     </style>
 </head>
 <body>
     <h1>📰 Spruce Grove Gazette</h1>
     <div class="meta">📍 Spruce Grove, AB | 📅 {datetime.now().strftime('%B %d, %Y')} | 🤖 AI-Generated</div>
-    {f'<img src="{feature_image}" alt="Article feature image">' if feature_image else ''}
     {article_html}
     <div class="footer">
         <p>— The Spruce Grove Gazette</p>
         <p>Your Hometown, Online. | Established 1950</p>
-        <p><small>This article was generated by the Gazette AI Newsroom and reviewed by editorial staff.</small></p>
+        <p><small>This article was generated by the Gazette AI Newsroom.</small></p>
     </div>
 </body>
 </html>""")
 
 print(f"\n💾 Article saved to: {output_file}")
 
-# Publish to Ghost
-print("\n" + "="*60)
-print("📤 Publishing to Ghost CMS...")
-print("="*60)
-
-publish_to_ghost(
-    title=title,
-    html_content=article_html,
-    topic=topic,
-    feature_image=feature_image
-)
+# Publish to Ghost if API key is set
+if GHOST_ADMIN_API_KEY:
+    print("\n" + "="*60)
+    print("📤 Publishing to Ghost CMS...")
+    print("="*60)
+    
+    publish_to_ghost(
+        title=title,
+        html_content=article_html,
+        feature_image=None
+    )
 
 print("\n" + "="*60)
 print("🏁 AI Newsroom session complete!")
