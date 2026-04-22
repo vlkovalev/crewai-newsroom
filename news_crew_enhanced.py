@@ -463,8 +463,8 @@ def build_complete_html(news_content, weather, events, letter, gallery):
         
         <div class="footer">
             <p>Email: editor@sprucegrovegazette.com</p>
-            <p>Phone: (780) 123-4567</p>
-            <p>123 Main Street, Spruce Grove, AB</p>
+            //<p>Phone: (780) 123-4567</p>
+            <p>123 Main Street, Spruce Grove, AB</p>//
             <div style="margin-top: 20px;">
                 <a href="#">About Us</a> | 
                 <a href="#">Advertise</a> | 
