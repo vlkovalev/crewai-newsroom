@@ -1,10 +1,13 @@
 """
 Spruce Grove Gazette - Complete AI Newsroom
-Features: Weather, Events, Letters, Photo Gallery, Social Sharing
+Features: Weather, Events, Letters, Photo Gallery, Social Sharing, Email Delivery
 """
 
 import os
 import re
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timedelta
 from crewai import Agent, Task, Crew, Process
 from dotenv import load_dotenv
@@ -20,6 +23,11 @@ GHOST_URL = os.environ.get('GHOST_URL', 'https://sprucegrovegazette-com.ghost.io
 GHOST_ADMIN_API_KEY = os.environ.get('GHOST_ADMIN_API_KEY', '')
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', '')
 
+# Email configuration
+SENDER_EMAIL = os.environ.get('SENDER_EMAIL', '')
+EMAIL_PASSWORD = os.environ.get('EMAIL_PASSWORD', '')
+RECIPIENT_EMAIL = os.environ.get('RECIPIENT_EMAIL', '')
+
 # Check if OpenAI API key is set
 if not OPENAI_API_KEY:
     print("ERROR: OPENAI_API_KEY environment variable is not set!")
@@ -28,18 +36,51 @@ if not OPENAI_API_KEY:
 print("OpenAI API key found")
 
 # ============================================
+# Email Function
+# ============================================
+
+def send_email(html_content, subject, recipient=None):
+    """Send email with the generated newspaper"""
+    if not SENDER_EMAIL or not EMAIL_PASSWORD:
+        print("Email credentials not configured. Skipping email send.")
+        return False
+    
+    if not recipient:
+        recipient = RECIPIENT_EMAIL
+    
+    if not recipient:
+        print("No recipient email configured. Skipping email send.")
+        return False
+    
+    try:
+        # Create message
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = subject
+        msg['From'] = SENDER_EMAIL
+        msg['To'] = recipient
+        
+        # Attach HTML content
+        html_part = MIMEText(html_content, 'html')
+        msg.attach(html_part)
+        
+        # Send email
+        print(f"Sending email to {recipient}...")
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+            server.login(SENDER_EMAIL, EMAIL_PASSWORD)
+            server.send_message(msg)
+        
+        print(f"Email sent successfully!")
+        return True
+    except Exception as e:
+        print(f"Failed to send email: {e}")
+        return False
+
+# ============================================
 # Weather Data (Simulated - Replace with API)
 # ============================================
 
 def get_spruce_grove_weather():
     """Get weather forecast for Spruce Grove"""
-    today = datetime.now()
-    
-    # In production, replace with actual API call to:
-    # - Environment Canada API
-    # - OpenWeatherMap
-    # - WeatherAPI.com
-    
     # Sample weather data (replace with real API)
     weather_data = {
         "current": {
@@ -64,11 +105,6 @@ def get_spruce_grove_weather():
 
 def get_upcoming_events():
     """Get upcoming events in Spruce Grove"""
-    # In production, replace with API calls to:
-    # - City of Spruce Grove events calendar
-    # - Local community boards
-    # - Facebook Events API
-    
     events = [
         {"name": "Spruce Grove Farmers Market", "date": datetime.now().strftime("%B %d, %Y"), "time": "10:00 AM - 3:00 PM", "location": "Downtown Spruce Grove", "description": "Local produce, crafts, and goods"},
         {"name": "City Council Meeting", "date": (datetime.now() + timedelta(days=3)).strftime("%B %d, %Y"), "time": "7:00 PM", "location": "City Hall", "description": "Public welcome to attend"},
@@ -84,7 +120,6 @@ def get_upcoming_events():
 
 def get_letter_to_editor():
     """Generate a sample letter to the editor"""
-    # In production, this would come from user submissions
     letters = [
         {
             "author": "Margaret Thompson, Spruce Grove",
@@ -99,7 +134,7 @@ def get_letter_to_editor():
             "date": datetime.now().strftime("%B %d, %Y")
         }
     ]
-    return letters[0]  # Return most recent letter
+    return letters[0]
 
 # ============================================
 # Photo Gallery Placeholders
@@ -107,16 +142,11 @@ def get_letter_to_editor():
 
 def get_photo_gallery():
     """Get photo gallery placeholders"""
-    # In production, these would be actual image URLs from:
-    # - Cloud storage (AWS S3, Cloudinary)
-    # - Local uploads
-    # - Community submissions
-    
     gallery = [
-        {"title": "Spring Festival Celebration", "caption": "Residents enjoy the annual Spring Festival", "placeholder": "Community Event", "image_url": "https://via.placeholder.com/800x400/2C5F2D/ffffff?text=Spring+Festival"},
-        {"title": "New Business Opening", "caption": "Main Street's newest local shop", "placeholder": "Local Business", "image_url": "https://via.placeholder.com/800x400/4A7C4B/ffffff?text=New+Business"},
-        {"title": "Youth Sports Action", "caption": "Local soccer team in tournament play", "placeholder": "Youth Sports", "image_url": "https://via.placeholder.com/800x400/2C5F2D/ffffff?text=Youth+Sports"},
-        {"title": "Community Volunteers", "caption": "Volunteers cleaning up the park", "placeholder": "Community Spirit", "image_url": "https://via.placeholder.com/800x400/4A7C4B/ffffff?text=Volunteers"}
+        {"title": "Spring Festival Celebration", "caption": "Residents enjoy the annual Spring Festival", "image_url": "https://via.placeholder.com/800x400/2C5F2D/ffffff?text=Spring+Festival"},
+        {"title": "New Business Opening", "caption": "Main Street's newest local shop", "image_url": "https://via.placeholder.com/800x400/4A7C4B/ffffff?text=New+Business"},
+        {"title": "Youth Sports Action", "caption": "Local soccer team in tournament play", "image_url": "https://via.placeholder.com/800x400/2C5F2D/ffffff?text=Youth+Sports"},
+        {"title": "Community Volunteers", "caption": "Volunteers cleaning up the park", "image_url": "https://via.placeholder.com/800x400/4A7C4B/ffffff?text=Volunteers"}
     ]
     return gallery
 
@@ -362,60 +392,50 @@ def build_complete_html(news_content, weather, events, letter, gallery):
         body {{ font-family: Georgia, 'Times New Roman', serif; background: #f5f5f0; }}
         .container {{ max-width: 1200px; margin: 0 auto; background: white; box-shadow: 0 0 20px rgba(0,0,0,0.1); }}
         
-        /* Header */
         .header {{ background: #2C5F2D; color: white; padding: 30px; text-align: center; }}
         .header h1 {{ font-size: 48px; margin-bottom: 10px; }}
         .header p {{ font-size: 18px; opacity: 0.9; }}
         .date {{ margin-top: 10px; font-style: italic; }}
         
-        /* Navigation */
         .nav {{ background: #1a3d1a; padding: 15px; text-align: center; }}
         .nav a {{ color: white; margin: 0 15px; text-decoration: none; font-weight: bold; }}
         .nav a:hover {{ text-decoration: underline; }}
         
-        /* Main content */
         .main-content {{ padding: 40px; }}
         
-        /* Weather */
         .weather-section {{ background: #e8f5e9; padding: 20px; border-radius: 10px; margin-bottom: 30px; }}
         .current-weather {{ text-align: center; margin-bottom: 20px; }}
         .temp {{ font-size: 48px; font-weight: bold; display: block; }}
         .forecast {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 10px; text-align: center; }}
         .forecast-day {{ background: white; padding: 10px; border-radius: 5px; }}
         
-        /* Events */
         .events-section {{ margin-bottom: 30px; }}
         .event-item {{ display: flex; gap: 20px; padding: 15px; border-bottom: 1px solid #ddd; }}
         .event-date {{ min-width: 120px; font-weight: bold; color: #2C5F2D; }}
         
-        /* Letter */
         .letter-section {{ background: #f9f9f5; padding: 20px; border-left: 4px solid #2C5F2D; margin-bottom: 30px; }}
         .letter-content {{ font-style: italic; margin: 15px 0; font-size: 18px; }}
         .letter-author {{ font-weight: bold; margin-top: 10px; }}
         .submit-letter {{ margin-top: 15px; }}
         .submit-letter a {{ color: #2C5F2D; text-decoration: none; font-weight: bold; }}
         
-        /* Gallery */
         .photo-gallery {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin: 20px 0; }}
         .gallery-item {{ background: #f5f5f0; border-radius: 10px; overflow: hidden; }}
         .gallery-item img {{ width: 100%; height: 250px; object-fit: cover; }}
         .gallery-caption {{ padding: 15px; }}
         .photo-credit {{ text-align: center; font-size: 12px; color: #666; margin-top: 10px; }}
         
-        /* Social sharing */
         .social-share {{ text-align: center; margin: 40px 0; padding: 20px; background: #f0f0f0; border-radius: 10px; }}
         .social-btn {{ display: inline-block; margin: 0 10px; padding: 10px 20px; text-decoration: none; border-radius: 5px; color: white; }}
         .social-btn.facebook {{ background: #3b5998; }}
         .social-btn.twitter {{ background: #1da1f2; }}
         .social-btn.email {{ background: #666; }}
         
-        /* News article */
         .news-article {{ margin-bottom: 40px; }}
         .news-article h2 {{ color: #2C5F2D; margin: 20px 0 15px 0; }}
         .news-article h3 {{ color: #4A7C4B; margin: 20px 0 10px 0; }}
         .news-article p {{ margin-bottom: 15px; line-height: 1.8; }}
         
-        /* Footer */
         .footer {{ background: #1a3d1a; color: white; text-align: center; padding: 30px; margin-top: 40px; }}
         .footer a {{ color: white; text-decoration: none; margin: 0 10px; }}
         
@@ -463,7 +483,7 @@ def build_complete_html(news_content, weather, events, letter, gallery):
         
         <div class="footer">
             <p>Email: editor@sprucegrovegazette.com</p>
-            //<p>123 Main Street, Spruce Grove, AB</p>//
+            <p>123 Main Street, Spruce Grove, AB</p>
             <div style="margin-top: 20px;">
                 <a href="#">About Us</a> | 
                 <a href="#">Advertise</a> | 
@@ -494,7 +514,7 @@ print("="*60)
 print(f"Date: {datetime.now().strftime('%B %d, %Y')}")
 print(f"Location: Spruce Grove, Alberta")
 print(f"Sections: News | Sports | Business | Community")
-print(f"Weather | Events | Letters | Gallery | Social")
+print(f"Weather | Events | Letters | Gallery | Social | Email")
 print("="*60)
 print("\nGenerating complete newspaper edition...\n")
 
@@ -534,6 +554,18 @@ print(f"File size: {len(complete_html):,} characters")
 print(f"Includes: Weather | Events | Letters | Gallery | Social Sharing")
 print("="*60)
 
+# Send email
+print("\n" + "="*60)
+print("Sending Email...")
+print("="*60)
+email_subject = f"Spruce Grove Gazette - {datetime.now().strftime('%B %d, %Y')}"
+email_sent = send_email(complete_html, email_subject)
+
+if email_sent:
+    print("Newspaper delivered to your inbox!")
+else:
+    print("Email not sent. Check your email configuration.")
+
 # Show preview of sections
 print("\nEdition Contents:")
 print(f"   Weather: {weather_data['current']['temperature']}°C, {weather_data['current']['condition']}")
@@ -542,6 +574,7 @@ print(f"   Letter from: {letter_data['author']}")
 print(f"   Photos: {len(gallery_data)} community photos")
 print(f"   Social: Facebook | Twitter | Email sharing")
 print(f"   News: AI-generated local coverage")
+print(f"   Email: {'Sent' if email_sent else 'Not configured'}")
 
 print("\n" + "="*60)
 print("Complete AI Newsroom session finished!")
