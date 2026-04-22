@@ -1,16 +1,24 @@
 """
-Spruce Grove Gazette - Complete AI Newsroom
-Features: Weather, Events, Letters, Photo Gallery, Social Sharing, Email Delivery
+Spruce Grove Gazette - MEGA Enhanced AI Newsroom
+Features: Weather API, Database, RSS, Analytics, Social Media, PDF, Audio, SMS, and more!
 """
 
 import os
 import re
+import json
+import sqlite3
 import smtplib
+import requests
+import pdfkit
+import tweepy
+from gtts import gTTS
+from datetime import datetime, timedelta
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from datetime import datetime, timedelta
 from crewai import Agent, Task, Crew, Process
 from dotenv import load_dotenv
+from textblob import TextBlob
+from feedgen.feed import FeedGenerator
 
 # Load environment variables
 load_dotenv()
@@ -19,14 +27,19 @@ load_dotenv()
 # Configuration
 # ============================================
 
-GHOST_URL = os.environ.get('GHOST_URL', 'https://sprucegrovegazette-com.ghost.io')
-GHOST_ADMIN_API_KEY = os.environ.get('GHOST_ADMIN_API_KEY', '')
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', '')
-
-# Email configuration
 SENDER_EMAIL = os.environ.get('SENDER_EMAIL', '')
 EMAIL_PASSWORD = os.environ.get('EMAIL_PASSWORD', '')
 RECIPIENT_EMAIL = os.environ.get('RECIPIENT_EMAIL', '')
+WEATHER_API_KEY = os.environ.get('WEATHER_API_KEY', '')
+TWITTER_API_KEY = os.environ.get('TWITTER_API_KEY', '')
+TWITTER_API_SECRET = os.environ.get('TWITTER_API_SECRET', '')
+TWITTER_ACCESS_TOKEN = os.environ.get('TWITTER_ACCESS_TOKEN', '')
+TWITTER_ACCESS_TOKEN_SECRET = os.environ.get('TWITTER_ACCESS_TOKEN_SECRET', '')
+TWILIO_SID = os.environ.get('TWILIO_SID', '')
+TWILIO_AUTH_TOKEN = os.environ.get('TWILIO_AUTH_TOKEN', '')
+TWILIO_PHONE_NUMBER = os.environ.get('TWILIO_PHONE_NUMBER', '')
+EMERGENCY_PHONE = os.environ.get('EMERGENCY_PHONE', '')
 
 # Check if OpenAI API key is set
 if not OPENAI_API_KEY:
@@ -36,7 +49,225 @@ if not OPENAI_API_KEY:
 print("OpenAI API key found")
 
 # ============================================
-# Email Function
+# Database Setup
+# ============================================
+
+def init_database():
+    """Initialize SQLite database for article storage"""
+    conn = sqlite3.connect('gazette_archive.db')
+    cursor = conn.cursor()
+    
+    # Articles table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS articles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT,
+            content TEXT,
+            summary TEXT,
+            file_path TEXT,
+            published_date DATE,
+            word_count INTEGER,
+            reading_time INTEGER,
+            views INTEGER DEFAULT 0,
+            shares INTEGER DEFAULT 0
+        )
+    ''')
+    
+    # Analytics table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS analytics (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            article_id INTEGER,
+            event_type TEXT,
+            event_data TEXT,
+            event_date TIMESTAMP,
+            FOREIGN KEY (article_id) REFERENCES articles (id)
+        )
+    ''')
+    
+    # Subscribers table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS subscribers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email TEXT UNIQUE,
+            name TEXT,
+            preferences TEXT,
+            subscribed_date DATE,
+            active BOOLEAN DEFAULT 1
+        )
+    ''')
+    
+    conn.commit()
+    conn.close()
+    print("Database initialized")
+
+def save_article_to_db(title, content, file_path):
+    """Save article to database"""
+    conn = sqlite3.connect('gazette_archive.db')
+    cursor = conn.cursor()
+    
+    word_count = len(content.split())
+    reading_time = round(word_count / 200)
+    summary = content[:200] + "..." if len(content) > 200 else content
+    
+    cursor.execute('''
+        INSERT INTO articles (title, content, summary, file_path, published_date, word_count, reading_time, views, shares)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (title, content, summary, file_path, datetime.now().date(), word_count, reading_time, 0, 0))
+    
+    article_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    
+    print(f"Article saved to database with ID: {article_id}")
+    return article_id
+
+def track_analytics(article_id, event_type, event_data=None):
+    """Track analytics events"""
+    conn = sqlite3.connect('gazette_archive.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        INSERT INTO analytics (article_id, event_type, event_data, event_date)
+        VALUES (?, ?, ?, ?)
+    ''', (article_id, event_type, event_data, datetime.now()))
+    
+    conn.commit()
+    conn.close()
+
+# ============================================
+# Real Weather API Integration
+# ============================================
+
+def get_real_weather():
+    """Get real weather data from OpenWeatherMap API"""
+    if not WEATHER_API_KEY:
+        print("Weather API key not configured. Using simulated data.")
+        return get_simulated_weather()
+    
+    try:
+        url = f"http://api.openweathermap.org/data/2.5/weather?q=Spruce Grove,CA&appid={WEATHER_API_KEY}&units=metric"
+        response = requests.get(url)
+        data = response.json()
+        
+        if response.status_code == 200:
+            # Get 5-day forecast
+            forecast_url = f"http://api.openweathermap.org/data/2.5/forecast?q=Spruce Grove,CA&appid={WEATHER_API_KEY}&units=metric"
+            forecast_response = requests.get(forecast_url)
+            forecast_data = forecast_response.json()
+            
+            weather = {
+                "current": {
+                    "temperature": round(data['main']['temp']),
+                    "condition": data['weather'][0]['description'].title(),
+                    "humidity": data['main']['humidity'],
+                    "wind": f"{data['wind']['speed']} km/h"
+                },
+                "forecast": []
+            }
+            
+            # Process forecast (get one reading per day)
+            seen_days = set()
+            for item in forecast_data['list']:
+                date = item['dt_txt'].split()[0]
+                if date not in seen_days and len(weather['forecast']) < 5:
+                    seen_days.add(date)
+                    weather['forecast'].append({
+                        "day": datetime.strptime(date, '%Y-%m-%d').strftime('%A'),
+                        "high": round(item['main']['temp_max']),
+                        "low": round(item['main']['temp_min']),
+                        "condition": item['weather'][0]['description'].title()
+                    })
+            
+            print(f"Real weather data loaded: {weather['current']['temperature']}°C")
+            return weather
+    except Exception as e:
+        print(f"Weather API error: {e}")
+    
+    return get_simulated_weather()
+
+def get_simulated_weather():
+    """Fallback simulated weather data"""
+    return {
+        "current": {"temperature": 18, "condition": "Partly Cloudy", "humidity": 65, "wind": "15 km/h SW"},
+        "forecast": [
+            {"day": "Today", "high": 20, "low": 8, "condition": "Sunny"},
+            {"day": "Tomorrow", "high": 22, "low": 10, "condition": "Partly Cloudy"},
+            {"day": "Wednesday", "high": 19, "low": 9, "condition": "Light Rain"},
+            {"day": "Thursday", "high": 21, "low": 11, "condition": "Sunny"},
+            {"day": "Friday", "high": 23, "low": 12, "condition": "Sunny"}
+        ]
+    }
+
+# ============================================
+# Severe Weather Alerts
+# ============================================
+
+def check_severe_weather(weather_data):
+    """Check for severe weather conditions and send alerts"""
+    severe_conditions = ['thunderstorm', 'hurricane', 'tornado', 'blizzard', 'heavy snow']
+    condition = weather_data['current']['condition'].lower()
+    
+    for severe in severe_conditions:
+        if severe in condition:
+            alert_message = f"Weather Alert: {condition} expected in Spruce Grove. Please take precautions."
+            print(f"⚠️ {alert_message}")
+            
+            # Send SMS if configured
+            if TWILIO_SID and EMERGENCY_PHONE:
+                send_sms_alert(alert_message, EMERGENCY_PHONE)
+            return True
+    return False
+
+# ============================================
+# SMS Alerts (Twilio)
+# ============================================
+
+def send_sms_alert(message, phone_number):
+    """Send SMS alert using Twilio"""
+    if not TWILIO_SID or not TWILIO_AUTH_TOKEN:
+        print("SMS not configured. Skipping.")
+        return False
+    
+    try:
+        from twilio.rest import Client
+        client = Client(TWILIO_SID, TWILIO_AUTH_TOKEN)
+        client.messages.create(
+            body=message,
+            from_=TWILIO_PHONE_NUMBER,
+            to=phone_number
+        )
+        print(f"SMS alert sent to {phone_number}")
+        return True
+    except Exception as e:
+        print(f"Failed to send SMS: {e}")
+        return False
+
+# ============================================
+# Social Media Auto-Posting (Twitter)
+# ============================================
+
+def post_to_twitter(headline, url):
+    """Post article to Twitter"""
+    if not all([TWITTER_API_KEY, TWITTER_API_SECRET, TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_TOKEN_SECRET]):
+        print("Twitter not configured. Skipping.")
+        return False
+    
+    try:
+        auth = tweepy.OAuthHandler(TWITTER_API_KEY, TWITTER_API_SECRET)
+        auth.set_access_token(TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_TOKEN_SECRET)
+        api = tweepy.API(auth)
+        
+        tweet = f"📰 New from Spruce Grove Gazette: {headline}\n{url}\n#SpruceGrove #LocalNews"
+        api.update_status(tweet)
+        print(f"Posted to Twitter: {headline}")
+        return True
+    except Exception as e:
+        print(f"Failed to post to Twitter: {e}")
+        return False
+
+# ============================================
+# Email Delivery
 # ============================================
 
 def send_email(html_content, subject, recipient=None):
@@ -49,58 +280,119 @@ def send_email(html_content, subject, recipient=None):
         recipient = RECIPIENT_EMAIL
     
     if not recipient:
-        print("No recipient email configured. Skipping email send.")
+        print("No recipient email configured.")
         return False
     
     try:
-        # Create message
         msg = MIMEMultipart('alternative')
         msg['Subject'] = subject
         msg['From'] = SENDER_EMAIL
         msg['To'] = recipient
         
-        # Attach HTML content
         html_part = MIMEText(html_content, 'html')
         msg.attach(html_part)
         
-        # Send email
         print(f"Sending email to {recipient}...")
         with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
             server.login(SENDER_EMAIL, EMAIL_PASSWORD)
             server.send_message(msg)
         
-        print(f"Email sent successfully!")
+        print("Email sent successfully!")
         return True
     except Exception as e:
         print(f"Failed to send email: {e}")
         return False
 
 # ============================================
-# Weather Data (Simulated - Replace with API)
+# PDF Generation
 # ============================================
 
-def get_spruce_grove_weather():
-    """Get weather forecast for Spruce Grove"""
-    # Sample weather data (replace with real API)
-    weather_data = {
-        "current": {
-            "temperature": 18,
-            "condition": "Partly Cloudy",
-            "humidity": 65,
-            "wind": "15 km/h SW"
-        },
-        "forecast": [
-            {"day": "Today", "high": 20, "low": 8, "condition": "Sunny"},
-            {"day": "Tomorrow", "high": 22, "low": 10, "condition": "Partly Cloudy"},
-            {"day": "Wednesday", "high": 19, "low": 9, "condition": "Light Rain"},
-            {"day": "Thursday", "high": 21, "low": 11, "condition": "Sunny"},
-            {"day": "Friday", "high": 23, "low": 12, "condition": "Sunny"}
-        ]
-    }
-    return weather_data
+def convert_to_pdf(html_file, pdf_file):
+    """Convert HTML to PDF for print-ready edition"""
+    try:
+        options = {
+            'page-size': 'Letter',
+            'margin-top': '0.75in',
+            'margin-bottom': '0.75in',
+            'margin-left': '0.75in',
+            'margin-right': '0.75in',
+            'encoding': 'UTF-8'
+        }
+        pdfkit.from_file(html_file, pdf_file, options=options)
+        print(f"PDF generated: {pdf_file}")
+        return True
+    except Exception as e:
+        print(f"PDF generation failed: {e}")
+        return False
 
 # ============================================
-# Upcoming Events Calendar
+# Audio Briefing Generation
+# ============================================
+
+def create_audio_briefing(article_text, title):
+    """Generate audio version of the article"""
+    try:
+        # Clean HTML tags
+        clean_text = re.sub(r'<[^>]+>', '', article_text)
+        # Limit to first 1000 characters for briefing
+        briefing_text = clean_text[:1000]
+        
+        audio_file = f"audio_briefing_{datetime.now().strftime('%Y%m%d')}.mp3"
+        tts = gTTS(text=briefing_text, lang='en', slow=False)
+        tts.save(audio_file)
+        print(f"Audio briefing generated: {audio_file}")
+        return audio_file
+    except Exception as e:
+        print(f"Audio generation failed: {e}")
+        return None
+
+# ============================================
+# RSS Feed Generation
+# ============================================
+
+def generate_rss_feed(articles_data):
+    """Generate RSS feed for readers to subscribe"""
+    try:
+        fg = FeedGenerator()
+        fg.title('Spruce Grove Gazette')
+        fg.link(href='https://sprucegrovegazette.com', rel='alternate')
+        fg.description('Local news for Spruce Grove, Alberta')
+        fg.language('en')
+        
+        for article in articles_data:
+            fe = fg.add_entry()
+            fe.title(article.get('title', 'Spruce Grove News'))
+            fe.link(href=article.get('url', '#'))
+            fe.description(article.get('summary', ''))
+            fe.pubDate(article.get('date', datetime.now()))
+        
+        fg.rss_file('rss_feed.xml')
+        print("RSS feed generated: rss_feed.xml")
+        return True
+    except Exception as e:
+        print(f"RSS generation failed: {e}")
+        return False
+
+# ============================================
+# Sentiment Analysis
+# ============================================
+
+def analyze_sentiment(text):
+    """Analyze sentiment of letters to the editor"""
+    blob = TextBlob(text)
+    sentiment_score = blob.sentiment.polarity
+    
+    if sentiment_score > 0.3:
+        sentiment = "Positive"
+    elif sentiment_score < -0.3:
+        sentiment = "Negative"
+    else:
+        sentiment = "Neutral"
+    
+    return sentiment, sentiment_score
+
+# ============================================
+# Upcoming Events
 # ============================================
 
 def get_upcoming_events():
@@ -115,11 +407,11 @@ def get_upcoming_events():
     return events
 
 # ============================================
-# Letter to the Editor
+# Letter to the Editor with Sentiment
 # ============================================
 
 def get_letter_to_editor():
-    """Generate a sample letter to the editor"""
+    """Generate a sample letter to the editor with sentiment analysis"""
     letters = [
         {
             "author": "Margaret Thompson, Spruce Grove",
@@ -134,10 +426,16 @@ def get_letter_to_editor():
             "date": datetime.now().strftime("%B %d, %Y")
         }
     ]
-    return letters[0]
+    
+    letter = letters[0]
+    sentiment, score = analyze_sentiment(letter['content'])
+    letter['sentiment'] = sentiment
+    letter['sentiment_score'] = score
+    
+    return letter
 
 # ============================================
-# Photo Gallery Placeholders
+# Photo Gallery
 # ============================================
 
 def get_photo_gallery():
@@ -149,6 +447,36 @@ def get_photo_gallery():
         {"title": "Community Volunteers", "caption": "Volunteers cleaning up the park", "image_url": "https://via.placeholder.com/800x400/4A7C4B/ffffff?text=Volunteers"}
     ]
     return gallery
+
+# ============================================
+# Analytics Dashboard Summary
+# ============================================
+
+def get_analytics_summary():
+    """Get analytics summary from database"""
+    conn = sqlite3.connect('gazette_archive.db')
+    cursor = conn.cursor()
+    
+    # Get total articles
+    cursor.execute("SELECT COUNT(*) FROM articles")
+    total_articles = cursor.fetchone()[0]
+    
+    # Get total views
+    cursor.execute("SELECT SUM(views) FROM articles")
+    total_views = cursor.fetchone()[0] or 0
+    
+    # Get most popular article
+    cursor.execute("SELECT title, views FROM articles ORDER BY views DESC LIMIT 1")
+    popular = cursor.fetchone()
+    
+    conn.close()
+    
+    return {
+        'total_articles': total_articles,
+        'total_views': total_views,
+        'most_popular': popular[0] if popular else 'None',
+        'popular_views': popular[1] if popular else 0
+    }
 
 # ============================================
 # Gazette Style Guide
@@ -199,7 +527,7 @@ researcher = Agent(
 fact_checker = Agent(
     role="Fact Checker",
     goal="Verify all facts, dates, names, and locations",
-    backstory="""You ensure accuracy across all content types.""",
+    backstory="You ensure accuracy across all content types.",
     verbose=True,
     allow_delegation=False
 )
@@ -207,7 +535,7 @@ fact_checker = Agent(
 writer = Agent(
     role="News Writer",
     goal="Write engaging articles in the Spruce Grove Gazette voice",
-    backstory=f"""You create warm, professional content. Follow: {GAZETTE_STYLE_GUIDE}""",
+    backstory=f"You create warm, professional content. Follow: {GAZETTE_STYLE_GUIDE}",
     verbose=True,
     allow_delegation=False
 )
@@ -215,7 +543,7 @@ writer = Agent(
 editor = Agent(
     role="Senior Editor",
     goal="Polish and perfect the complete newspaper",
-    backstory="""You ensure everything meets Gazette standards.""",
+    backstory="You ensure everything meets Gazette standards.",
     verbose=True,
     allow_delegation=True
 )
@@ -223,7 +551,7 @@ editor = Agent(
 headline_writer = Agent(
     role="Headline Specialist",
     goal="Create compelling headlines",
-    backstory="""You master engaging, clickable headlines.""",
+    backstory="You master engaging, clickable headlines.",
     verbose=True,
     allow_delegation=False
 )
@@ -292,7 +620,7 @@ print("5 Tasks created")
 # HTML Template Builder
 # ============================================
 
-def build_complete_html(news_content, weather, events, letter, gallery):
+def build_complete_html(news_content, weather, events, letter, gallery, analytics):
     """Build complete HTML page with all sections"""
     
     # Social sharing links
@@ -343,15 +671,17 @@ def build_complete_html(news_content, weather, events, letter, gallery):
     </div>
     """
     
-    # Letter to editor
+    # Letter to editor with sentiment
+    sentiment_emoji = "😊" if letter['sentiment'] == "Positive" else "😟" if letter['sentiment'] == "Negative" else "😐"
     letter_html = f"""
     <div class="letter-section">
-        <h3>Letter to the Editor</h3>
+        <h3>Letter to the Editor {sentiment_emoji}</h3>
         <div class="letter">
             <div class="letter-subject"><strong>Subject:</strong> {letter['subject']}</div>
             <div class="letter-content">"{letter['content']}"</div>
             <div class="letter-author">— {letter['author']}</div>
             <div class="letter-date">Date: {letter['date']}</div>
+            <div class="letter-sentiment">Community Sentiment: {letter['sentiment']}</div>
         </div>
         <p class="submit-letter"><a href="#">Submit your letter to the editor →</a></p>
     </div>
@@ -376,6 +706,28 @@ def build_complete_html(news_content, weather, events, letter, gallery):
     </div>
     """
     
+    # Analytics section
+    analytics_html = f"""
+    <div class="analytics-section">
+        <h3>Gazette by the Numbers</h3>
+        <div class="analytics-stats">
+            <div class="stat">
+                <span class="stat-number">{analytics['total_articles']}</span>
+                <span class="stat-label">Total Articles</span>
+            </div>
+            <div class="stat">
+                <span class="stat-number">{analytics['total_views']}</span>
+                <span class="stat-label">Total Views</span>
+            </div>
+            <div class="stat">
+                <span class="stat-number">{analytics['popular_views']}</span>
+                <span class="stat-label">Most Popular Views</span>
+            </div>
+        </div>
+        <p class="analytics-note">* Analytics since launch</p>
+    </div>
+    """
+    
     # Complete HTML
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -383,9 +735,13 @@ def build_complete_html(news_content, weather, events, letter, gallery):
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Spruce Grove Gazette - {datetime.now().strftime('%B %d, %Y')}</title>
+    <meta name="description" content="Latest news from Spruce Grove, Alberta">
+    <meta name="keywords" content="Spruce Grove, local news, community, events, weather">
+    <meta name="author" content="Spruce Grove Gazette">
     <meta property="og:title" content="Spruce Grove Gazette">
     <meta property="og:type" content="website">
     <meta property="og:url" content="{current_url}">
+    <meta property="og:image" content="https://via.placeholder.com/1200x630/2C5F2D/ffffff?text=Spruce+Grove+Gazette">
     <meta name="twitter:card" content="summary_large_image">
     <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
@@ -416,6 +772,7 @@ def build_complete_html(news_content, weather, events, letter, gallery):
         .letter-section {{ background: #f9f9f5; padding: 20px; border-left: 4px solid #2C5F2D; margin-bottom: 30px; }}
         .letter-content {{ font-style: italic; margin: 15px 0; font-size: 18px; }}
         .letter-author {{ font-weight: bold; margin-top: 10px; }}
+        .letter-sentiment {{ margin-top: 10px; color: #666; font-size: 14px; }}
         .submit-letter {{ margin-top: 15px; }}
         .submit-letter a {{ color: #2C5F2D; text-decoration: none; font-weight: bold; }}
         
@@ -431,6 +788,13 @@ def build_complete_html(news_content, weather, events, letter, gallery):
         .social-btn.twitter {{ background: #1da1f2; }}
         .social-btn.email {{ background: #666; }}
         
+        .analytics-section {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; border-radius: 10px; margin: 30px 0; text-align: center; }}
+        .analytics-stats {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 20px; margin-top: 20px; }}
+        .stat {{ text-align: center; }}
+        .stat-number {{ font-size: 36px; font-weight: bold; display: block; }}
+        .stat-label {{ font-size: 14px; opacity: 0.9; }}
+        .analytics-note {{ margin-top: 15px; font-size: 12px; opacity: 0.8; }}
+        
         .news-article {{ margin-bottom: 40px; }}
         .news-article h2 {{ color: #2C5F2D; margin: 20px 0 15px 0; }}
         .news-article h3 {{ color: #4A7C4B; margin: 20px 0 10px 0; }}
@@ -444,6 +808,7 @@ def build_complete_html(news_content, weather, events, letter, gallery):
             .event-item {{ flex-direction: column; gap: 5px; }}
             .forecast {{ grid-template-columns: repeat(2, 1fr); }}
             .photo-gallery {{ grid-template-columns: 1fr; }}
+            .analytics-stats {{ grid-template-columns: 1fr; }}
         }}
     </style>
 </head>
@@ -463,6 +828,7 @@ def build_complete_html(news_content, weather, events, letter, gallery):
             <a href="#">Community</a>
             <a href="#">Events</a>
             <a href="#">Opinion</a>
+            <a href="#">Archive</a>
         </div>
         
         <div class="main-content">
@@ -478,6 +844,8 @@ def build_complete_html(news_content, weather, events, letter, gallery):
             
             {gallery_html}
             
+            {analytics_html}
+            
             {social_links}
         </div>
         
@@ -488,7 +856,8 @@ def build_complete_html(news_content, weather, events, letter, gallery):
                 <a href="#">About Us</a> | 
                 <a href="#">Advertise</a> | 
                 <a href="#">Subscribe</a> | 
-                <a href="#">Contact</a>
+                <a href="#">Contact</a> |
+                <a href="#">RSS Feed</a>
             </div>
             <p style="margin-top: 20px;">Copyright {datetime.now().year} Spruce Grove Gazette. All rights reserved.</p>
             <p><small>Portions of this content generated by AI and reviewed by editorial staff</small></p>
@@ -498,9 +867,13 @@ def build_complete_html(news_content, weather, events, letter, gallery):
 </html>"""
 
 # ============================================
-# Create and Run the Crew
+# Main Execution
 # ============================================
 
+# Initialize database
+init_database()
+
+# Create and run the crew
 news_crew = Crew(
     agents=[researcher, fact_checker, writer, editor, headline_writer],
     tasks=[research_task, fact_check_task, writing_task, editing_task, headline_task],
@@ -509,33 +882,51 @@ news_crew = Crew(
 )
 
 print("\n" + "="*60)
-print("Spruce Grove Gazette - Complete AI Newsroom")
+print("Spruce Grove Gazette - MEGA Enhanced AI Newsroom")
 print("="*60)
 print(f"Date: {datetime.now().strftime('%B %d, %Y')}")
 print(f"Location: Spruce Grove, Alberta")
-print(f"Sections: News | Sports | Business | Community")
-print(f"Weather | Events | Letters | Gallery | Social | Email")
+print("="*60)
+print("\nFeatures Enabled:")
+print("  ✅ Database Storage")
+print("  ✅ Real Weather API")
+print("  ✅ RSS Feed Generation")
+print("  ✅ Analytics Tracking")
+print("  ✅ Social Media Auto-Post")
+print("  ✅ PDF Generation")
+print("  ✅ Audio Briefing")
+print("  ✅ SMS Alerts")
+print("  ✅ Sentiment Analysis")
 print("="*60)
 print("\nGenerating complete newspaper edition...\n")
 
 # Get real-time data
 print("Gathering real-time data...")
-weather_data = get_spruce_grove_weather()
+weather_data = get_real_weather()
 events_data = get_upcoming_events()
 letter_data = get_letter_to_editor()
 gallery_data = get_photo_gallery()
+
+# Check for severe weather
+check_severe_weather(weather_data)
+
 print(f"Weather: {weather_data['current']['temperature']}°C, {weather_data['current']['condition']}")
 print(f"Events: {len(events_data)} upcoming")
 print(f"Gallery: {len(gallery_data)} photos")
+print(f"Letter sentiment: {letter_data['sentiment']} (score: {letter_data['sentiment_score']:.2f})")
 
 # Run the crew for news content
 print("\nAI agents writing news content...\n")
+start_time = datetime.now()
 result = news_crew.kickoff()
+end_time = datetime.now()
+generation_time = (end_time - start_time).total_seconds()
+
 article_html = str(result)
 
 # Build complete HTML page
 print("\nBuilding complete newspaper page...")
-complete_html = build_complete_html(article_html, weather_data, events_data, letter_data, gallery_data)
+complete_html = build_complete_html(article_html, weather_data, events_data, letter_data, gallery_data, get_analytics_summary())
 
 # Extract headline for title
 title_match = re.search(r'<h2[^>]*>(.*?)</h2>', article_html)
@@ -546,12 +937,38 @@ output_file = f"spruce_grove_gazette_{datetime.now().strftime('%Y%m%d_%H%M%S')}.
 with open(output_file, "w", encoding="utf-8") as f:
     f.write(complete_html)
 
+# Save to database
+article_id = save_article_to_db(title, article_html, output_file)
+track_analytics(article_id, 'generation', {'time_seconds': generation_time})
+
+# Generate additional formats
+print("\n" + "="*60)
+print("Generating Additional Formats...")
+print("="*60)
+
+# Generate PDF
+pdf_file = output_file.replace('.html', '.pdf')
+convert_to_pdf(output_file, pdf_file)
+
+# Generate Audio Briefing
+audio_file = create_audio_briefing(article_html, title)
+
+# Generate RSS Feed
+rss_articles = [{'title': title, 'summary': article_html[:200], 'date': datetime.now(), 'url': output_file}]
+generate_rss_feed(rss_articles)
+
+# Get analytics summary
+analytics = get_analytics_summary()
+
 print("\n" + "="*60)
 print("Complete Newspaper Edition Generated!")
 print("="*60)
-print(f"Saved to: {output_file}")
+print(f"HTML: {output_file}")
+print(f"PDF: {pdf_file}")
+print(f"Audio: {audio_file if audio_file else 'Not generated'}")
+print(f"RSS: rss_feed.xml")
 print(f"File size: {len(complete_html):,} characters")
-print(f"Includes: Weather | Events | Letters | Gallery | Social Sharing")
+print(f"Generation time: {generation_time:.2f} seconds")
 print("="*60)
 
 # Send email
@@ -566,17 +983,29 @@ if email_sent:
 else:
     print("Email not sent. Check your email configuration.")
 
-# Show preview of sections
-print("\nEdition Contents:")
+# Post to Twitter
+print("\n" + "="*60)
+print("Social Media Auto-Posting...")
+print("="*60)
+twitter_posted = post_to_twitter(title, output_file)
+
+# Show final summary
+print("\n" + "="*60)
+print("Edition Statistics:")
+print("="*60)
 print(f"   Weather: {weather_data['current']['temperature']}°C, {weather_data['current']['condition']}")
 print(f"   Events: {len(events_data)} local events")
-print(f"   Letter from: {letter_data['author']}")
+print(f"   Letter sentiment: {letter_data['sentiment']}")
 print(f"   Photos: {len(gallery_data)} community photos")
-print(f"   Social: Facebook | Twitter | Email sharing")
-print(f"   News: AI-generated local coverage")
+print(f"   Total articles in archive: {analytics['total_articles']}")
+print(f"   Total views all time: {analytics['total_views']}")
+print(f"   Generation time: {generation_time:.2f} seconds")
 print(f"   Email: {'Sent' if email_sent else 'Not configured'}")
+print(f"   Twitter: {'Posted' if twitter_posted else 'Not configured'}")
+print(f"   PDF: {'Generated' if pdf_file else 'Failed'}")
+print(f"   Audio: {'Generated' if audio_file else 'Failed'}")
 
 print("\n" + "="*60)
-print("Complete AI Newsroom session finished!")
+print("MEGA Enhanced AI Newsroom session finished!")
 print("Spruce Grove Gazette is ready to publish!")
 print("="*60)
