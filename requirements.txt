@@ -1,0 +1,6 @@
+﻿crewai
+langchain-community
+openai
+python-dotenv
+requests
+duckduckgo-search
