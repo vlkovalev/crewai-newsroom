@@ -314,7 +314,7 @@ def home():
 <body>
     <div class="install-prompt" id="installPrompt"><span>📱 Install the Gazette app</span><button id="installBtn">Install</button></div>
     <div class="top-bar">🌿 Spruce Grove's Primary Resource for Trade & Employment | "Your Hometown, Online."</div>
-    <div class="header"><div class="logo"><h1>📰 The Spruce Grove Gazette</h1><p>ESTABLISHED 1950 | INDEPENDENT & LOCAL</p><div class="tagline">"Your Hometown, Online." • Spruce Grove's Primary Resource for Trade & Employment</div></div></div>
+    <div class="header"><div class="logo"><h1>📰 The Spruce Grove Gazette</h1><p>ESTABLISHED 2026 | INDEPENDENT & LOCAL</p><div class="tagline">"Your Hometown, Online." • Spruce Grove's Primary Resource for Trade & Employment</div></div></div>
     <div class="date-header">📍 Spruce Grove, Alberta | {datetime.now().strftime('%A, %B %d, %Y')}</div>
     <div class="nav">
         <a href="/">🏠 HOME</a>
@@ -379,7 +379,7 @@ def home():
             <div class="footer-column"><h4>🔗 Categories</h4><a href="/classifieds?category=jobs">Jobs</a><a href="/classifieds?category=sale">For Sale</a><a href="/classifieds?category=housing">Housing</a><a href="/classifieds?category=services">Services</a><a href="/classifieds?category=garage">Garage Sales</a></div>
             <div class="footer-column"><h4>📍 Location</h4><a href="#">Spruce Grove, Alberta</a><a href="#">Canada T7X 0A1</a><a href="#">"Your Hometown, Online."</a></div>
         </div>
-        <div class="copyright"><p>© {datetime.now().year} The Spruce Grove Gazette. All rights reserved.</p><p>Proudly serving Spruce Grove since 1950 | Spruce Grove's Primary Resource for Trade & Employment</p></div>
+        <div class="copyright"><p>© {datetime.now().year} The Spruce Grove Gazette. All rights reserved.</p><p>Proudly serving Spruce Grove since 2026 | Spruce Grove's Primary Resource for Trade & Employment</p></div>
     </div>
     <script>
         let deferredPrompt;
