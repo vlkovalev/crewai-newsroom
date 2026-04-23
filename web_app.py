@@ -1,6 +1,6 @@
 """
-Spruce Grove Gazette - Complete Newspaper Website
-All features: Analytics, Newsletter, Social Sharing, Weather, Events, Photo Gallery, Letters, RSS, PDF, Audio, Mobile App, SEO
+Spruce Grove Gazette - Progressive Web App (PWA)
+Complete newspaper website with installable mobile app functionality
 """
 
 import os
@@ -9,7 +9,7 @@ import glob
 import json
 import requests
 from datetime import datetime, date, timedelta
-from flask import Flask, jsonify, request, send_file, render_template_string
+from flask import Flask, jsonify, request, send_file
 
 app = Flask(__name__)
 
@@ -19,8 +19,6 @@ app = Flask(__name__)
 
 GA_MEASUREMENT_ID = os.environ.get('GA_MEASUREMENT_ID', 'G-XXXXXXXXXX')
 WEATHER_API_KEY = os.environ.get('WEATHER_API_KEY', '')
-SENDER_EMAIL = os.environ.get('SENDER_EMAIL', '')
-EMAIL_PASSWORD = os.environ.get('EMAIL_PASSWORD', '')
 
 # ============================================
 # Database Setup
@@ -36,8 +34,7 @@ def init_database():
             content TEXT,
             file_path TEXT,
             published_date DATE,
-            views INTEGER DEFAULT 0,
-            shares INTEGER DEFAULT 0
+            views INTEGER DEFAULT 0
         )
     ''')
     cursor.execute('''
@@ -92,11 +89,7 @@ def get_weather():
             url = f"http://api.openweathermap.org/data/2.5/weather?q=Spruce Grove,CA&appid={WEATHER_API_KEY}&units=metric"
             response = requests.get(url)
             data = response.json()
-            return {
-                "temp": round(data['main']['temp']),
-                "condition": data['weather'][0]['description'].title(),
-                "humidity": data['main']['humidity']
-            }
+            return {"temp": round(data['main']['temp']), "condition": data['weather'][0]['description'].title(), "humidity": data['main']['humidity']}
         except:
             pass
     return {"temp": 18, "condition": "Partly Cloudy", "humidity": 65}
@@ -127,6 +120,166 @@ def get_letters():
         return [{"author": l[0], "subject": l[1], "content": l[2], "date": l[3]} for l in letters]
     return [{"author": "Margaret Thompson", "subject": "Thank You Volunteers", "content": "Thank you to all who made the Spring Festival a success!", "date": datetime.now().strftime("%B %d, %Y")}]
 
+# ============================================
+# PWA Routes - Service Worker & Manifest
+# ============================================
+
+@app.route('/manifest.json')
+def manifest():
+    """Web App Manifest for PWA installation"""
+    manifest_data = {
+        "name": "Spruce Grove Gazette",
+        "short_name": "SG Gazette",
+        "description": "Spruce Grove's trusted local news source",
+        "start_url": "/",
+        "display": "standalone",
+        "theme_color": "#1a3d1a",
+        "background_color": "#f9f9f5",
+        "orientation": "portrait-primary",
+        "icons": [
+            {
+                "src": "/static/icons/icon-72x72.png",
+                "sizes": "72x72",
+                "type": "image/png",
+                "purpose": "any maskable"
+            },
+            {
+                "src": "/static/icons/icon-96x96.png",
+                "sizes": "96x96",
+                "type": "image/png"
+            },
+            {
+                "src": "/static/icons/icon-128x128.png",
+                "sizes": "128x128",
+                "type": "image/png"
+            },
+            {
+                "src": "/static/icons/icon-144x144.png",
+                "sizes": "144x144",
+                "type": "image/png"
+            },
+            {
+                "src": "/static/icons/icon-152x152.png",
+                "sizes": "152x152",
+                "type": "image/png"
+            },
+            {
+                "src": "/static/icons/icon-192x192.png",
+                "sizes": "192x192",
+                "type": "image/png"
+            },
+            {
+                "src": "/static/icons/icon-384x384.png",
+                "sizes": "384x384",
+                "type": "image/png"
+            },
+            {
+                "src": "/static/icons/icon-512x512.png",
+                "sizes": "512x512",
+                "type": "image/png"
+            }
+        ]
+    }
+    return app.response_class(json.dumps(manifest_data), mimetype='application/manifest+json')
+
+@app.route('/sw.js')
+def service_worker():
+    """Service Worker for offline functionality"""
+    sw_js = '''
+const CACHE_NAME = 'gazette-v1';
+const urlsToCache = [
+    '/',
+    '/latest',
+    '/offline'
+];
+
+self.addEventListener('install', event => {
+    event.waitUntil(
+        caches.open(CACHE_NAME)
+            .then(cache => cache.addAll(urlsToCache))
+    );
+});
+
+self.addEventListener('fetch', event => {
+    event.respondWith(
+        caches.match(event.request)
+            .then(response => {
+                if (response) {
+                    return response;
+                }
+                return fetch(event.request).then(
+                    response => {
+                        if(!response || response.status !== 200 || response.type !== 'basic') {
+                            return response;
+                        }
+                        const responseToCache = response.clone();
+                        caches.open(CACHE_NAME)
+                            .then(cache => {
+                                cache.put(event.request, responseToCache);
+                            });
+                        return response;
+                    }
+                ).catch(() => {
+                    if (event.request.mode === 'navigate') {
+                        return caches.match('/offline');
+                    }
+                });
+            })
+    );
+});
+
+self.addEventListener('activate', event => {
+    const cacheWhitelist = [CACHE_NAME];
+    event.waitUntil(
+        caches.keys().then(cacheNames => {
+            return Promise.all(
+                cacheNames.map(cacheName => {
+                    if (cacheWhitelist.indexOf(cacheName) === -1) {
+                        return caches.delete(cacheName);
+                    }
+                })
+            );
+        })
+    );
+});
+    '''
+    return app.response_class(sw_js, mimetype='application/javascript')
+
+@app.route('/offline')
+def offline():
+    """Offline fallback page"""
+    return '''
+    <!DOCTYPE html>
+    <html>
+    <head><title>Offline - Spruce Grove Gazette</title>
+    <style>
+        body { font-family: Georgia, serif; text-align: center; padding: 50px; background: #f9f9f5; }
+        h1 { color: #1a3d1a; }
+        .btn { display: inline-block; background: #1a3d1a; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; }
+    </style>
+    </head>
+    <body>
+        <h1>📰 You're Offline</h1>
+        <p>Please check your internet connection.</p>
+        <a href="/" class="btn">Try Again</a>
+    </body>
+    </html>
+    '''
+
+@app.route('/static/icons/<path:filename>')
+def serve_icon(filename):
+    """Serve PWA icons - using emoji fallback"""
+    # For now, return a simple SVG icon
+    svg = f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+        <rect width="100" height="100" fill="#1a3d1a"/>
+        <text x="50" y="50" text-anchor="middle" dy=".3em" fill="white" font-size="40">📰</text>
+    </svg>'''
+    return app.response_class(svg, mimetype='image/svg+xml')
+
+# ============================================
+# Main Route - PWA Enabled Homepage
+# ============================================
+
 @app.route('/')
 def home():
     total_articles = get_article_count()
@@ -140,17 +293,28 @@ def home():
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>Spruce Grove Gazette - Spruce Grove's Trusted News Source</title>
     <meta name="description" content="Spruce Grove's premier local news source. Breaking news, community events, sports, business, and weather for Spruce Grove, Alberta.">
     <meta name="keywords" content="Spruce Grove, local news, Alberta news, community news">
     <meta name="author" content="Spruce Grove Gazette">
+    
+    <!-- PWA Meta Tags -->
+    <link rel="manifest" href="/manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="SG Gazette">
+    <meta name="theme-color" content="#1a3d1a">
+    <link rel="apple-touch-icon" href="/static/icons/icon-192x192.png">
+    
+    <!-- Open Graph -->
     <meta property="og:title" content="Spruce Grove Gazette">
     <meta property="og:description" content="Your trusted source for Spruce Grove local news">
     <meta property="og:url" content="https://sprucegrovegazette.com">
     <meta property="og:type" content="website">
     <meta name="twitter:card" content="summary_large_image">
     
+    <!-- Google Analytics -->
     <script async src="https://www.googletagmanager.com/gtag/js?id={GA_MEASUREMENT_ID}"></script>
     <script>
         window.dataLayer = window.dataLayer || [];
@@ -180,6 +344,35 @@ def home():
             background: var(--bg-light);
             color: var(--text-dark);
             line-height: 1.6;
+        }}
+        
+        /* PWA Install Prompt */
+        .install-prompt {{
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--primary);
+            color: white;
+            padding: 15px 25px;
+            border-radius: 50px;
+            display: none;
+            align-items: center;
+            gap: 15px;
+            z-index: 1001;
+            box-shadow: var(--shadow);
+            cursor: pointer;
+        }}
+        
+        .install-prompt.show {{ display: flex; }}
+        .install-prompt button {{
+            background: var(--accent);
+            color: var(--primary);
+            border: none;
+            padding: 8px 20px;
+            border-radius: 25px;
+            font-weight: bold;
+            cursor: pointer;
         }}
         
         .top-bar {{
@@ -223,15 +416,18 @@ def home():
             position: sticky;
             top: 0;
             z-index: 1000;
+            overflow-x: auto;
+            white-space: nowrap;
         }}
         
         .nav a {{
             color: white;
             text-decoration: none;
-            margin: 0 20px;
+            margin: 0 15px;
             font-weight: 600;
             text-transform: uppercase;
             font-size: 14px;
+            display: inline-block;
         }}
         
         .nav a:hover {{ color: var(--accent); }}
@@ -239,7 +435,7 @@ def home():
         .hero {{
             background: linear-gradient(135deg, #1a3d1a, #2C5F2D);
             color: white;
-            padding: 50px;
+            padding: 50px 20px;
             text-align: center;
         }}
         
@@ -302,6 +498,7 @@ def home():
             text-decoration: none;
             border-radius: 5px;
             font-weight: bold;
+            margin-top: 15px;
         }}
         
         .weather-card {{
@@ -433,18 +630,34 @@ def home():
             font-size: 12px;
         }}
         
+        /* Mobile Optimizations */
         @media (max-width: 768px) {{
-            .stats-grid {{ grid-template-columns: repeat(2, 1fr); }}
+            .stats-grid {{ grid-template-columns: repeat(2, 1fr); gap: 15px; }}
             .two-column {{ grid-template-columns: 1fr; }}
             .footer-content {{ grid-template-columns: repeat(2, 1fr); }}
             .photo-gallery {{ grid-template-columns: 1fr; }}
-            .logo h1 {{ font-size: 40px; }}
+            .logo h1 {{ font-size: 36px; }}
+            .hero h2 {{ font-size: 28px; }}
+            .section-title {{ font-size: 24px; }}
+            .stat-number {{ font-size: 28px; }}
+            .nav a {{ margin: 0 10px; font-size: 11px; }}
+            .newsletter-section, .social-section {{ padding: 30px 20px; }}
+        }}
+        
+        @media (max-width: 480px) {{
+            .stats-grid {{ grid-template-columns: 1fr; }}
+            .footer-content {{ grid-template-columns: 1fr; text-align: center; }}
         }}
     </style>
 </head>
 <body>
     <div class="top-bar">
         🌿 Spruce Grove's Trusted News Source Since 1950
+    </div>
+    
+    <div class="install-prompt" id="installPrompt">
+        <span>📱 Install the Gazette app on your phone</span>
+        <button id="installBtn">Install</button>
     </div>
     
     <div class="header">
@@ -460,10 +673,9 @@ def home():
     
     <div class="nav">
         <a href="/">🏠 HOME</a>
-        <a href="/latest">📰 LATEST EDITION</a>
+        <a href="/latest">📰 LATEST</a>
         <a href="/rss">📡 RSS</a>
         <a href="/subscribe">✉️ NEWSLETTER</a>
-        <a href="/mobile">📱 MOBILE APP</a>
     </div>
     
     <div class="hero">
@@ -490,7 +702,7 @@ def home():
                 
                 <h2 class="section-title">📸 Community Photos</h2>
                 <div class="photo-gallery">
-                    {"".join([f'<div class="gallery-item"><img src="{p["image"]}" alt="{p["title"]}"><p><strong>{p["title"]}</strong><br>{p["caption"]}</p></div>' for p in gallery])}
+                    {"".join([f'<div class="gallery-item"><img src="{p["image"]}" alt="{p["title"]}" loading="lazy"><p><strong>{p["title"]}</strong><br>{p["caption"]}</p></div>' for p in gallery])}
                 </div>
                 
                 <h2 class="section-title">✉️ Letters to the Editor</h2>
@@ -515,11 +727,11 @@ def home():
                     </ul>
                 </div>
                 
-                <h2 class="section-title">📱 Mobile App</h2>
+                <h2 class="section-title">📱 Install Our App</h2>
                 <div class="feature-card" style="text-align: center;">
                     <i class="fas fa-mobile-alt" style="font-size: 48px; color: var(--primary);"></i>
-                    <p>Get the Gazette on your phone. Download our mobile app for news alerts and breaking stories.</p>
-                    <a href="/mobile" class="btn">Learn More →</a>
+                    <p>Add the Gazette to your home screen for quick access, offline reading, and push notifications.</p>
+                    <button id="mobileInstallBtn" class="btn" style="background: var(--accent); color: var(--primary);">📲 Install App</button>
                 </div>
             </div>
         </div>
@@ -552,27 +764,23 @@ def home():
                 <a href="/latest">Latest Edition</a>
                 <a href="/subscribe">Newsletter</a>
                 <a href="/rss">RSS Feed</a>
-                <a href="/mobile">Mobile App</a>
             </div>
             <div class="footer-column">
                 <h4>📬 Connect</h4>
                 <a href="mailto:editor@sprucegrovegazette.com">editor@sprucegrovegazette.com</a>
                 <a href="/submit-letter">Submit a Letter</a>
                 <a href="#">Advertising</a>
-                <a href="#">News Tips</a>
             </div>
             <div class="footer-column">
                 <h4>🔗 Resources</h4>
                 <a href="#">About Us</a>
                 <a href="#">Privacy Policy</a>
-                <a href="#">Terms of Service</a>
                 <a href="/sitemap.xml">Sitemap</a>
             </div>
             <div class="footer-column">
                 <h4>📍 Location</h4>
                 <a href="#">Spruce Grove, Alberta</a>
                 <a href="#">Canada T7X 0A1</a>
-                <a href="#">📧 editor@sprucegrovegazette.com</a>
             </div>
         </div>
         <div class="copyright">
@@ -580,12 +788,50 @@ def home():
             <p>Proudly serving Spruce Grove since 1950</p>
         </div>
     </div>
+    
+    <script>
+        // PWA Installation
+        let deferredPrompt;
+        
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            document.getElementById('installPrompt').classList.add('show');
+        });
+        
+        document.getElementById('installBtn').addEventListener('click', async () => {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                const { outcome } = await deferredPrompt.userChoice;
+                if (outcome === 'accepted') {
+                    console.log('App installed');
+                }
+                deferredPrompt = null;
+                document.getElementById('installPrompt').classList.remove('show');
+            }
+        });
+        
+        document.getElementById('mobileInstallBtn')?.addEventListener('click', () => {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+            } else {
+                alert('To install: Tap the Share button and select "Add to Home Screen"');
+            }
+        });
+        
+        // Register Service Worker
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js')
+                .then(reg => console.log('Service Worker registered', reg))
+                .catch(err => console.log('Service Worker failed', err));
+        }
+    </script>
 </body>
 </html>
 '''
 
 # ============================================
-# Additional Routes - All Features
+# Additional Routes
 # ============================================
 
 @app.route('/latest')
@@ -593,7 +839,17 @@ def latest_article():
     latest = get_latest_article()
     if latest:
         return send_file(latest)
-    return "<h1>First Edition Coming Soon</h1><p>Check back soon!</p>"
+    return '''
+    <!DOCTYPE html>
+    <html>
+    <head><title>Latest Edition - Spruce Grove Gazette</title></head>
+    <body style="font-family: Georgia, serif; text-align: center; padding: 50px;">
+        <h1 style="color: #1a3d1a;">📰 First Edition Coming Soon</h1>
+        <p>Our first edition is being prepared. Check back soon!</p>
+        <a href="/" style="color: #1a3d1a;">← Back to Home</a>
+    </body>
+    </html>
+    '''
 
 @app.route('/rss')
 def rss_feed():
@@ -616,38 +872,6 @@ def rss_feed():
 </channel>
 </rss>'''
     return app.response_class(rss, mimetype='application/rss+xml')
-
-@app.route('/mobile')
-def mobile_app():
-    return '''
-    <!DOCTYPE html>
-    <html>
-    <head><title>Mobile App - Spruce Grove Gazette</title>
-    <style>
-        body { font-family: Georgia, serif; background: #f0f0e8; text-align: center; padding: 50px; }
-        .container { max-width: 600px; margin: 0 auto; background: white; padding: 40px; border-radius: 10px; }
-        h1 { color: #1a3d1a; }
-        .btn { display: inline-block; background: #1a3d1a; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; margin: 10px; }
-        .btn-apple { background: #000; }
-        .btn-android { background: #3ddc84; color: #000; }
-    </style>
-    </head>
-    <body>
-        <div class="container">
-            <h1>📱 Spruce Grove Gazette Mobile App</h1>
-            <p>Get the latest news on your phone with our mobile app.</p>
-            <p><strong>Features:</strong><br>
-            • Breaking news alerts<br>
-            • Save articles for offline reading<br>
-            • Customize your news feed<br>
-            • Local weather and events</p>
-            <a href="#" class="btn btn-apple">🍎 Download on App Store</a>
-            <a href="#" class="btn btn-android">🤖 Get it on Google Play</a>
-            <p style="margin-top: 20px;"><a href="/">← Back to Gazette</a></p>
-        </div>
-    </body>
-    </html>
-    '''
 
 @app.route('/submit-letter', methods=['GET', 'POST'])
 def submit_letter():
@@ -773,7 +997,6 @@ def sitemap():
     <url><loc>https://sprucegrovegazette.com/</loc><lastmod>{datetime.now().strftime('%Y-%m-%d')}</lastmod><priority>1.0</priority></url>
     <url><loc>https://sprucegrovegazette.com/latest</loc><priority>0.9</priority></url>
     <url><loc>https://sprucegrovegazette.com/subscribe</loc><priority>0.8</priority></url>
-    <url><loc>https://sprucegrovegazette.com/mobile</loc><priority>0.7</priority></url>
 </urlset>'''
     return app.response_class(sitemap, mimetype='application/xml')
 
