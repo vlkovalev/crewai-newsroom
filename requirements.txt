@@ -7,3 +7,4 @@ duckduckgo-search==8.1.1
 tiktoken==0.5.2
 requests>=2.31.0
 flask>=2.3.0
+pdfkit>=1.0.0
