@@ -1,6 +1,6 @@
 """
-Spruce Grove Gazette - Complete Newspaper with Classifieds & Search
-Features: Classifieds (Jobs, Sale, Housing, Services, Garage Sale), Search, Archives, PWA
+Spruce Grove Gazette - Complete Newspaper with Classifieds, Search, Enhanced Weather
+Features: Classifieds (Jobs, Sale, Housing, Services, Garage Sale), Search, Archives, PWA, Weather
 """
 
 import os
@@ -9,9 +9,19 @@ import glob
 import json
 import requests
 from datetime import datetime, date, timedelta
-from flask import Flask, jsonify, request, send_file, render_template_string
+from flask import Flask, jsonify, request, send_file
 
 app = Flask(__name__)
+
+# ============================================
+# Newspaper Launch Information
+# ============================================
+
+NEWSPAPER_NAME = "The Spruce Grove Gazette"
+LAUNCH_DATE = "April 2026"
+LAUNCH_YEAR = 2026
+FULL_LAUNCH_DATE = "April 23, 2026"
+TAGLINE = "Spruce Grove's Primary Resource for Trade & Employment"
 
 # ============================================
 # Configuration
@@ -28,7 +38,6 @@ def init_database():
     conn = sqlite3.connect('gazette_archive.db')
     cursor = conn.cursor()
     
-    # Articles table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS articles (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -40,7 +49,6 @@ def init_database():
         )
     ''')
     
-    # Subscribers table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS subscribers (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -51,7 +59,6 @@ def init_database():
         )
     ''')
     
-    # Letters table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS letters (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -63,7 +70,6 @@ def init_database():
         )
     ''')
     
-    # Classifieds table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS classifieds (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -109,16 +115,84 @@ def get_subscriber_count():
     conn.close()
     return count
 
+def get_weather_icon(icon_code):
+    """Map weather icon codes to emoji"""
+    icon_map = {
+        "01d": "☀️", "01n": "🌙",
+        "02d": "⛅", "02n": "☁️",
+        "03d": "☁️", "03n": "☁️",
+        "04d": "☁️", "04n": "☁️",
+        "09d": "🌧️", "09n": "🌧️",
+        "10d": "🌦️", "10n": "🌧️",
+        "11d": "⛈️", "11n": "⛈️",
+        "13d": "❄️", "13n": "❄️",
+        "50d": "🌫️", "50n": "🌫️"
+    }
+    return icon_map.get(icon_code, "🌡️")
+
 def get_weather():
+    """Get enhanced weather data for Spruce Grove with 5-day forecast"""
     if WEATHER_API_KEY:
         try:
+            # Current weather
             url = f"http://api.openweathermap.org/data/2.5/weather?q=Spruce Grove,CA&appid={WEATHER_API_KEY}&units=metric"
             response = requests.get(url)
             data = response.json()
-            return {"temp": round(data['main']['temp']), "condition": data['weather'][0]['description'].title(), "humidity": data['main']['humidity']}
-        except:
-            pass
-    return {"temp": 18, "condition": "Partly Cloudy", "humidity": 65}
+            
+            # 5-day forecast
+            forecast_url = f"http://api.openweathermap.org/data/2.5/forecast?q=Spruce Grove,CA&appid={WEATHER_API_KEY}&units=metric"
+            forecast_response = requests.get(forecast_url)
+            forecast_data = forecast_response.json()
+            
+            # Process forecast
+            forecast = []
+            days_processed = set()
+            for item in forecast_data['list']:
+                date = item['dt_txt'].split()[0]
+                if date not in days_processed and len(forecast) < 5:
+                    days_processed.add(date)
+                    condition = item['weather'][0]['description'].title()
+                    forecast.append({
+                        "day": datetime.strptime(date, '%Y-%m-%d').strftime('%a'),
+                        "full_day": datetime.strptime(date, '%Y-%m-%d').strftime('%A'),
+                        "high": round(item['main']['temp_max']),
+                        "low": round(item['main']['temp_min']),
+                        "condition": condition,
+                        "icon": get_weather_icon(item['weather'][0]['icon'])
+                    })
+            
+            return {
+                "current": {
+                    "temp": round(data['main']['temp']),
+                    "feels_like": round(data['main']['feels_like']),
+                    "condition": data['weather'][0]['description'].title(),
+                    "humidity": data['main']['humidity'],
+                    "wind": round(data['wind']['speed']),
+                    "icon": get_weather_icon(data['weather'][0]['icon'])
+                },
+                "forecast": forecast
+            }
+        except Exception as e:
+            print(f"Weather API error: {e}")
+    
+    # Fallback data
+    return {
+        "current": {
+            "temp": 18,
+            "feels_like": 17,
+            "condition": "Partly Cloudy",
+            "humidity": 65,
+            "wind": 15,
+            "icon": "🌤️"
+        },
+        "forecast": [
+            {"day": "Mon", "high": 20, "low": 8, "condition": "Sunny", "icon": "☀️"},
+            {"day": "Tue", "high": 22, "low": 10, "condition": "Partly Cloudy", "icon": "⛅"},
+            {"day": "Wed", "high": 19, "low": 9, "condition": "Light Rain", "icon": "🌧️"},
+            {"day": "Thu", "high": 21, "low": 11, "condition": "Sunny", "icon": "☀️"},
+            {"day": "Fri", "high": 23, "low": 12, "condition": "Sunny", "icon": "☀️"}
+        ]
+    }
 
 def get_events():
     return [
@@ -173,7 +247,7 @@ def search_articles(query):
 @app.route('/manifest.json')
 def manifest():
     manifest_data = {
-        "name": "Spruce Grove Gazette",
+        "name": NEWSPAPER_NAME,
         "short_name": "SG Gazette",
         "description": "Spruce Grove's trusted local news source",
         "start_url": "/",
@@ -232,7 +306,7 @@ def home():
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <title>Spruce Grove Gazette - Spruce Grove's Trusted News Source</title>
+    <title>{NEWSPAPER_NAME} - Spruce Grove's Trusted News Source</title>
     <link rel="manifest" href="/manifest.json">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -273,8 +347,50 @@ def home():
         .feature-card {{ background: white; border-radius: 10px; padding: 25px; margin-bottom: 30px; box-shadow: var(--shadow); }}
         .btn {{ display: inline-block; background: var(--primary); color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; margin-top: 15px; }}
         .btn-small {{ padding: 8px 20px; font-size: 14px; }}
-        .weather-card {{ background: linear-gradient(135deg, #2C5F2D, #1a3d1a); color: white; padding: 20px; border-radius: 10px; text-align: center; margin-bottom: 30px; }}
-        .weather-temp {{ font-size: 48px; font-weight: bold; }}
+        
+        /* Enhanced Weather Widget */
+        .weather-widget {{
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            border-radius: 20px;
+            padding: 25px;
+            color: white;
+            margin-bottom: 30px;
+            box-shadow: var(--shadow);
+            position: relative;
+            overflow: hidden;
+        }}
+        .weather-widget::before {{
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+            pointer-events: none;
+        }}
+        .weather-header {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.2); }}
+        .weather-header h3 {{ font-size: 18px; font-weight: normal; margin: 0; }}
+        .weather-header span {{ font-size: 12px; opacity: 0.8; }}
+        .current-weather {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; flex-wrap: wrap; }}
+        .weather-main {{ text-align: center; }}
+        .weather-icon {{ font-size: 64px; margin-bottom: 5px; }}
+        .weather-temp {{ font-size: 56px; font-weight: bold; line-height: 1; }}
+        .weather-temp small {{ font-size: 24px; font-weight: normal; }}
+        .feels-like {{ font-size: 14px; opacity: 0.8; margin-top: 5px; }}
+        .weather-details {{ text-align: right; }}
+        .weather-detail-item {{ display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 14px; }}
+        .weather-condition {{ font-size: 18px; margin-top: 5px; }}
+        .forecast-container {{ margin-top: 20px; }}
+        .forecast-title {{ font-size: 14px; margin-bottom: 15px; opacity: 0.8; text-align: center; }}
+        .forecast-grid {{ display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }}
+        .forecast-day {{ text-align: center; padding: 10px 5px; background: rgba(255,255,255,0.1); border-radius: 10px; transition: transform 0.3s; }}
+        .forecast-day:hover {{ transform: translateY(-3px); background: rgba(255,255,255,0.2); }}
+        .forecast-day-name {{ font-size: 13px; font-weight: bold; margin-bottom: 8px; }}
+        .forecast-icon {{ font-size: 24px; margin-bottom: 8px; }}
+        .forecast-temp {{ font-size: 14px; font-weight: bold; }}
+        .forecast-temp small {{ font-size: 11px; opacity: 0.7; }}
+        
         .classified-item {{ padding: 15px; border-bottom: 1px solid #eee; }}
         .classified-item:last-child {{ border-bottom: none; }}
         .classified-price {{ color: var(--accent); font-weight: bold; }}
@@ -297,6 +413,7 @@ def home():
         .footer-column a {{ color: #ccc; text-decoration: none; display: block; margin-bottom: 10px; font-size: 14px; }}
         .footer-column a:hover {{ color: var(--accent); }}
         .copyright {{ text-align: center; padding-top: 40px; margin-top: 40px; border-top: 1px solid rgba(255,255,255,0.1); font-size: 12px; }}
+        
         @media (max-width: 768px) {{
             .stats-grid {{ grid-template-columns: repeat(2, 1fr); }}
             .two-column {{ grid-template-columns: 1fr; }}
@@ -304,17 +421,21 @@ def home():
             .photo-gallery {{ grid-template-columns: 1fr; }}
             .logo h1 {{ font-size: 36px; }}
             .hero h2 {{ font-size: 28px; }}
+            .current-weather {{ flex-direction: column; text-align: center; gap: 20px; }}
+            .weather-details {{ text-align: center; }}
+            .weather-detail-item {{ justify-content: center; }}
+            .forecast-grid {{ grid-template-columns: repeat(auto-fit, minmax(70px, 1fr)); }}
         }}
         @media (max-width: 480px) {{
             .stats-grid {{ grid-template-columns: 1fr; }}
-            .footer-content {{ grid-template-columns: 1fr; }}
+            .footer-content {{ grid-template-columns: 1fr; text-align: center; }}
         }}
     </style>
 </head>
 <body>
     <div class="install-prompt" id="installPrompt"><span>📱 Install the Gazette app</span><button id="installBtn">Install</button></div>
     <div class="top-bar">🌿 Spruce Grove's Primary Resource for Trade & Employment | "Your Hometown, Online."</div>
-    <div class="header"><div class="logo"><h1>📰 The Spruce Grove Gazette</h1><p>ESTABLISHED 2026 | INDEPENDENT & LOCAL</p><div class="tagline">"Your Hometown, Online." • Spruce Grove's Primary Resource for Trade & Employment</div></div></div>
+    <div class="header"><div class="logo"><h1>📰 {NEWSPAPER_NAME}</h1><p>ESTABLISHED {LAUNCH_DATE} | INDEPENDENT & LOCAL</p><div class="tagline">"Your Hometown, Online." • Spruce Grove's Primary Resource for Trade & Employment</div></div></div>
     <div class="date-header">📍 Spruce Grove, Alberta | {datetime.now().strftime('%A, %B %d, %Y')}</div>
     <div class="nav">
         <a href="/">🏠 HOME</a>
@@ -351,7 +472,40 @@ def home():
                 <div class="feature-card">{"".join([f'<div style="margin-bottom: 20px;"><strong>{l["subject"]}</strong><br>"{l["content"]}"<br><em>— {l["author"]}</em><br><small>{l["date"]}</small></div>' for l in letters])}<a href="/submit-letter" class="btn btn-small" style="background: var(--accent); color: var(--primary);">Submit a Letter →</a></div>
             </div>
             <div>
-                <div class="weather-card"><i class="fas fa-sun" style="font-size: 36px;"></i><div class="weather-temp">{weather['temp']}°C</div><div>{weather['condition']}</div><div>Humidity: {weather['humidity']}%</div></div>
+                <!-- Enhanced Weather Widget -->
+                <div class="weather-widget">
+                    <div class="weather-header">
+                        <h3><i class="fas fa-map-marker-alt"></i> Spruce Grove, AB</h3>
+                        <span>{datetime.now().strftime('%A, %B %d')}</span>
+                    </div>
+                    <div class="current-weather">
+                        <div class="weather-main">
+                            <div class="weather-icon">{weather['current']['icon']}</div>
+                            <div class="weather-temp">{weather['current']['temp']}<small>°C</small></div>
+                            <div class="feels-like">Feels like {weather['current']['feels_like']}°C</div>
+                            <div class="weather-condition">{weather['current']['condition']}</div>
+                        </div>
+                        <div class="weather-details">
+                            <div class="weather-detail-item"><i class="fas fa-tint"></i><span>Humidity: {weather['current']['humidity']}%</span></div>
+                            <div class="weather-detail-item"><i class="fas fa-wind"></i><span>Wind: {weather['current']['wind']} km/h</span></div>
+                            <div class="weather-detail-item"><i class="fas fa-sun"></i><span>UV Index: Moderate</span></div>
+                            <div class="weather-detail-item"><i class="fas fa-eye"></i><span>Visibility: 16 km</span></div>
+                        </div>
+                    </div>
+                    <div class="forecast-container">
+                        <div class="forecast-title">5-DAY FORECAST</div>
+                        <div class="forecast-grid">
+                            {"".join([f'''
+                            <div class="forecast-day">
+                                <div class="forecast-day-name">{f['day']}</div>
+                                <div class="forecast-icon">{f['icon']}</div>
+                                <div class="forecast-temp">{f['high']}<small>°</small> / {f['low']}<small>°</small></div>
+                                <div style="font-size: 10px; opacity: 0.8;">{f['condition'][:10]}</div>
+                            </div>
+                            ''' for f in weather['forecast']])}
+                        </div>
+                    </div>
+                </div>
                 
                 <h2 class="section-title">📅 Upcoming Events</h2>
                 <div class="feature-card"><ul style="list-style: none;">{"".join([f'<li style="padding: 10px 0; border-bottom: 1px solid #eee;"><strong>{e["name"]}</strong><br>{e["date"]} at {e["time"]}<br>📍 {e["location"]}</li>' for e in events])}</ul></div>
@@ -379,7 +533,7 @@ def home():
             <div class="footer-column"><h4>🔗 Categories</h4><a href="/classifieds?category=jobs">Jobs</a><a href="/classifieds?category=sale">For Sale</a><a href="/classifieds?category=housing">Housing</a><a href="/classifieds?category=services">Services</a><a href="/classifieds?category=garage">Garage Sales</a></div>
             <div class="footer-column"><h4>📍 Location</h4><a href="#">Spruce Grove, Alberta</a><a href="#">Canada T7X 0A1</a><a href="#">"Your Hometown, Online."</a></div>
         </div>
-        <div class="copyright"><p>© {datetime.now().year} The Spruce Grove Gazette. All rights reserved.</p><p>Proudly serving Spruce Grove since 2026 | Spruce Grove's Primary Resource for Trade & Employment</p></div>
+        <div class="copyright"><p>© {LAUNCH_YEAR} {NEWSPAPER_NAME}. All rights reserved.</p><p>Proudly serving Spruce Grove since {LAUNCH_DATE} | {TAGLINE}</p></div>
     </div>
     <script>
         let deferredPrompt;
@@ -413,7 +567,7 @@ def classifieds():
     return f'''
 <!DOCTYPE html>
 <html>
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Classifieds - Spruce Grove Gazette</title>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Classifieds - {NEWSPAPER_NAME}</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <style>
     body {{ font-family: Georgia, serif; background: #f9f9f5; margin: 0; }}
@@ -432,7 +586,7 @@ def classifieds():
 </style>
 </head>
 <body>
-    <div class="header"><h1>📰 Spruce Grove Gazette</h1><p>Classifieds • Trade • Employment</p></div>
+    <div class="header"><h1>📰 {NEWSPAPER_NAME}</h1><p>Classifieds • Trade • Employment</p></div>
     <div class="nav"><a href="/">🏠 Home</a><a href="/classifieds">📋 Classifieds</a><a href="/post-ad">📝 Post an Ad</a><a href="/search">🔍 Search</a></div>
     <div class="container">
         <h2>📋 Classifieds <span style="font-size: 14px; color: #666;">Spruce Grove's Primary Resource for Trade & Employment</span></h2>
@@ -451,7 +605,7 @@ def classifieds():
         {f'<p style="text-align: center; color: #666;">No classifieds found in this category. <a href="/post-ad">Post an ad →</a></p>' if not classifieds_list else ''}
         <div style="text-align: center; margin-top: 30px;"><a href="/post-ad" class="btn">📝 Post an Ad →</a></div>
     </div>
-    <div class="footer"><p>© 2026 Spruce Grove Gazette | "Your Hometown, Online."</p></div>
+    <div class="footer"><p>© {LAUNCH_YEAR} {NEWSPAPER_NAME} | "Your Hometown, Online."</p></div>
 </body>
 </html>
 '''
@@ -475,10 +629,10 @@ def post_ad():
         conn.commit()
         conn.close()
         
-        return '''
+        return f'''
         <!DOCTYPE html>
         <html>
-        <head><title>Ad Posted - Spruce Grove Gazette</title></head>
+        <head><title>Ad Posted - {NEWSPAPER_NAME}</title></head>
         <body style="font-family: Georgia; text-align: center; padding: 50px;">
             <h1 style="color: #1a3d1a;">✅ Ad Posted Successfully!</h1>
             <p>Your classified ad has been submitted and will appear shortly.</p>
@@ -490,7 +644,7 @@ def post_ad():
     return f'''
 <!DOCTYPE html>
 <html>
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Post an Ad - Spruce Grove Gazette</title>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Post an Ad - {NEWSPAPER_NAME}</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <style>
     body {{ font-family: Georgia, serif; background: #f9f9f5; margin: 0; }}
@@ -504,7 +658,7 @@ def post_ad():
 </style>
 </head>
 <body>
-    <div class="header"><h1>📰 Spruce Grove Gazette</h1><p>Post a Classified Ad</p></div>
+    <div class="header"><h1>📰 {NEWSPAPER_NAME}</h1><p>Post a Classified Ad</p></div>
     <div class="container">
         <div class="form-card">
             <h2>📝 Post an Ad</h2>
@@ -528,7 +682,7 @@ def post_ad():
             <a href="/classifieds" class="btn-back">← Back to Classifieds</a>
         </div>
     </div>
-    <div class="footer"><p>© {datetime.now().year} Spruce Grove Gazette | "Your Hometown, Online."</p></div>
+    <div class="footer"><p>© {LAUNCH_YEAR} {NEWSPAPER_NAME} | "Your Hometown, Online."</p></div>
 </body>
 </html>
 '''
@@ -547,7 +701,7 @@ def search():
     return f'''
 <!DOCTYPE html>
 <html>
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Search - Spruce Grove Gazette</title>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Search - {NEWSPAPER_NAME}</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <style>
     body {{ font-family: Georgia, serif; background: #f9f9f5; margin: 0; }}
@@ -566,7 +720,7 @@ def search():
 </style>
 </head>
 <body>
-    <div class="header"><h1>📰 Spruce Grove Gazette</h1><p>Search Dispatches, Events, and Archives</p></div>
+    <div class="header"><h1>📰 {NEWSPAPER_NAME}</h1><p>Search Dispatches, Events, and Archives</p></div>
     <div class="nav"><a href="/">🏠 Home</a><a href="/latest">📰 Dispatches</a><a href="/classifieds">📋 Classifieds</a></div>
     <div class="container">
         <div class="search-box">
@@ -586,7 +740,7 @@ def search():
         {f'<p style="text-align: center; color: #666;">No results found for "{query}". Try different keywords.</p>' if query and not results else ''}
         {f'<p style="text-align: center; color: #666;">Enter search terms above to find Gazette dispatches, events, and archives.</p>' if not query else ''}
     </div>
-    <div class="footer"><p>© {datetime.now().year} Spruce Grove Gazette | "Your Hometown, Online."</p></div>
+    <div class="footer"><p>© {LAUNCH_YEAR} {NEWSPAPER_NAME} | "Your Hometown, Online."</p></div>
 </body>
 </html>
 '''
@@ -600,7 +754,7 @@ def latest_article():
     latest = get_latest_article()
     if latest:
         return send_file(latest)
-    return '<!DOCTYPE html><html><head><title>Latest Dispatch</title></head><body style="font-family:Georgia;text-align:center;padding:50px;"><h1>📰 First Dispatch Coming Soon</h1><p>Our first edition is being prepared. Check back soon!</p><a href="/">← Back to Gazette</a></body></html>'
+    return f'<!DOCTYPE html><html><head><title>Latest Dispatch</title></head><body style="font-family:Georgia;text-align:center;padding:50px;"><h1>📰 First Dispatch Coming Soon</h1><p>Our first edition is being prepared. Check back soon!</p><a href="/">← Back to {NEWSPAPER_NAME}</a></body></html>'
 
 @app.route('/rss')
 def rss_feed():
@@ -612,7 +766,7 @@ def rss_feed():
     rss = f'''<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0">
 <channel>
-    <title>Spruce Grove Gazette</title>
+    <title>{NEWSPAPER_NAME}</title>
     <link>https://sprucegrovegazette.com</link>
     <description>Local news for Spruce Grove, Alberta</description>
     <language>en-ca</language>
@@ -633,14 +787,14 @@ def submit_letter():
         cursor.execute("INSERT INTO letters (author, subject, content, date, approved) VALUES (?, ?, ?, ?, 0)", (author, subject, content, date.today()))
         conn.commit()
         conn.close()
-        return '<html><body style="font-family: Georgia; text-align: center; padding: 50px;"><h1 style="color: #1a3d1a;">✅ Letter Submitted</h1><a href="/">← Back</a></body></html>'
-    return '''
+        return f'<html><body style="font-family: Georgia; text-align: center; padding: 50px;"><h1 style="color: #1a3d1a;">✅ Letter Submitted</h1><a href="/">← Back to {NEWSPAPER_NAME}</a></body></html>'
+    return f'''
     <!DOCTYPE html>
     <html>
-    <head><title>Submit a Letter</title>
-    <style>body{font-family:Georgia;background:#f0f0e8;padding:50px}.container{max-width:600px;margin:0 auto;background:white;padding:40px;border-radius:10px}input,textarea{width:100%;padding:10px;margin:10px 0}button{background:#1a3d1a;color:white;padding:12px 24px;border:none;border-radius:5px;cursor:pointer}</style>
+    <head><title>Submit a Letter - {NEWSPAPER_NAME}</title>
+    <style>body{{font-family:Georgia;background:#f0f0e8;padding:50px}}.container{{max-width:600px;margin:0 auto;background:white;padding:40px;border-radius:10px}}input,textarea{{width:100%;padding:10px;margin:10px 0}}button{{background:#1a3d1a;color:white;padding:12px 24px;border:none;border-radius:5px;cursor:pointer}}</style>
     </head>
-    <body><div class="container"><h1>✉️ Submit a Letter</h1><form method="POST"><input type="text" name="author" placeholder="Your name" required><input type="text" name="subject" placeholder="Subject" required><textarea name="content" rows="6" placeholder="Write your letter..." required></textarea><button type="submit">Submit →</button></form><p><a href="/">← Back</a></p></div></body>
+    <body><div class="container"><h1>✉️ Submit a Letter to the Editor</h1><form method="POST"><input type="text" name="author" placeholder="Your name" required><input type="text" name="subject" placeholder="Subject" required><textarea name="content" rows="6" placeholder="Write your letter..." required></textarea><button type="submit">Submit →</button></form><p><a href="/">← Back to {NEWSPAPER_NAME}</a></p></div></body>
     </html>
     '''
 
@@ -658,14 +812,14 @@ def subscribe():
             except:
                 pass
             conn.close()
-        return '<html><body style="font-family: Georgia; text-align: center; padding: 50px;"><h1 style="color: #1a3d1a;">✅ Subscribed!</h1><a href="/">← Back</a></body></html>'
-    return '''
+        return f'<html><body style="font-family: Georgia; text-align: center; padding: 50px;"><h1 style="color: #1a3d1a;">✅ Subscribed to {NEWSPAPER_NAME}!</h1><a href="/">← Back to Gazette</a></body></html>'
+    return f'''
     <!DOCTYPE html>
     <html>
-    <head><title>Subscribe</title>
-    <style>body{font-family:Georgia;background:#f0f0e8;padding:50px}.container{max-width:500px;margin:0 auto;background:white;padding:40px;border-radius:10px}input{width:100%;padding:12px;margin:10px 0}button{background:#1a3d1a;color:white;padding:12px 24px;border:none;border-radius:5px;cursor:pointer}</style>
+    <head><title>Subscribe to {NEWSPAPER_NAME}</title>
+    <style>body{{font-family:Georgia;background:#f0f0e8;padding:50px}}.container{{max-width:500px;margin:0 auto;background:white;padding:40px;border-radius:10px}}input{{width:100%;padding:12px;margin:10px 0}}button{{background:#1a3d1a;color:white;padding:12px 24px;border:none;border-radius:5px;cursor:pointer}}</style>
     </head>
-    <body><div class="container"><h1>📧 Subscribe</h1><form method="POST"><input type="text" name="name" placeholder="Your name"><input type="email" name="email" placeholder="Your email" required><button type="submit">Subscribe →</button></form><p><a href="/">← Back</a></p></div></body>
+    <body><div class="container"><h1>📧 Subscribe to {NEWSPAPER_NAME}</h1><p>Get local news delivered to your inbox every morning.</p><form method="POST"><input type="text" name="name" placeholder="Your name"><input type="email" name="email" placeholder="Your email" required><button type="submit">Subscribe →</button></form><p><a href="/">← Back to Home</a></p></div></body>
     </html>
     '''
 
@@ -675,7 +829,7 @@ def health():
 
 @app.route('/api/status')
 def api_status():
-    return jsonify({"name": "Spruce Grove Gazette", "schedule": "Daily at 8:00 AM MT", "total_articles": get_article_count(), "subscribers": get_subscriber_count()})
+    return jsonify({"name": NEWSPAPER_NAME, "schedule": "Daily at 8:00 AM MT", "total_articles": get_article_count(), "subscribers": get_subscriber_count()})
 
 @app.route('/sitemap.xml')
 def sitemap():
