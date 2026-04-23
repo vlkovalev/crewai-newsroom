@@ -1,5 +1,6 @@
 """
-Spruce Grove Gazette - Complete Newspaper
+Spruce Grove Gazette - Complete Newspaper Website
+Displays articles from database, weather, classifieds, and more
 """
 
 import os
@@ -12,37 +13,96 @@ from flask import Flask, jsonify, request, send_file
 
 app = Flask(__name__)
 
+# ============================================
 # Newspaper Information
+# ============================================
+
 NEWSPAPER_NAME = "The Spruce Grove Gazette"
 LAUNCH_DATE = "April 2026"
 LAUNCH_YEAR = 2026
 TAGLINE = "Spruce Grove's Primary Resource for Trade & Employment"
 
+# ============================================
 # Configuration
+# ============================================
+
 GA_MEASUREMENT_ID = os.environ.get('GA_MEASUREMENT_ID', 'G-XXXXXXXXXX')
 WEATHER_API_KEY = os.environ.get('WEATHER_API_KEY', '')
 
+# ============================================
 # Database Setup
+# ============================================
+
+DB_PATH = 'gazette_archive.db'
+
 def init_database():
-    conn = sqlite3.connect('gazette_archive.db')
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute('CREATE TABLE IF NOT EXISTS articles (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, content TEXT, file_path TEXT, published_date DATE, views INTEGER DEFAULT 0)')
-    cursor.execute('CREATE TABLE IF NOT EXISTS subscribers (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT UNIQUE, name TEXT, subscribed_date DATE, active BOOLEAN DEFAULT 1)')
-    cursor.execute('CREATE TABLE IF NOT EXISTS letters (id INTEGER PRIMARY KEY AUTOINCREMENT, author TEXT, subject TEXT, content TEXT, date DATE, approved BOOLEAN DEFAULT 0)')
-    cursor.execute('CREATE TABLE IF NOT EXISTS classifieds (id INTEGER PRIMARY KEY AUTOINCREMENT, category TEXT, title TEXT, description TEXT, price TEXT, contact TEXT, email TEXT, date DATE, active BOOLEAN DEFAULT 1)')
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS articles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT,
+            content TEXT,
+            file_path TEXT,
+            published_date DATE,
+            word_count INTEGER,
+            generation_time REAL
+        )
+    ''')
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS subscribers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email TEXT UNIQUE,
+            name TEXT,
+            subscribed_date DATE,
+            active BOOLEAN DEFAULT 1
+        )
+    ''')
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS letters (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            author TEXT,
+            subject TEXT,
+            content TEXT,
+            date DATE,
+            approved BOOLEAN DEFAULT 0
+        )
+    ''')
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS classifieds (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            category TEXT,
+            title TEXT,
+            description TEXT,
+            price TEXT,
+            contact TEXT,
+            email TEXT,
+            date DATE,
+            active BOOLEAN DEFAULT 1
+        )
+    ''')
     conn.commit()
     conn.close()
 
 init_database()
 
-def get_latest_article():
-    html_files = glob.glob('spruce_grove_gazette_*.html')
-    if html_files:
-        return max(html_files, key=os.path.getctime)
+# ============================================
+# Helper Functions
+# ============================================
+
+def get_latest_article_from_db():
+    """Get the latest article from database"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT title, content, published_date FROM articles ORDER BY published_date DESC LIMIT 1")
+    result = cursor.fetchone()
+    conn.close()
+    if result:
+        return {"title": result[0], "content": result[1], "date": result[2]}
     return None
 
 def get_article_count():
-    conn = sqlite3.connect('gazette_archive.db')
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("SELECT COUNT(*) FROM articles")
     count = cursor.fetchone()[0]
@@ -50,16 +110,12 @@ def get_article_count():
     return count
 
 def get_subscriber_count():
-    conn = sqlite3.connect('gazette_archive.db')
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("SELECT COUNT(*) FROM subscribers WHERE active = 1")
     count = cursor.fetchone()[0]
     conn.close()
     return count
-
-def get_weather_icon(icon_code):
-    icon_map = {"01d": "☀️", "01n": "🌙", "02d": "⛅", "02n": "☁️", "03d": "☁️", "03n": "☁️", "04d": "☁️", "04n": "☁️", "09d": "🌧️", "09n": "🌧️", "10d": "🌦️", "10n": "🌧️", "11d": "⛈️", "11n": "⛈️", "13d": "❄️", "13n": "❄️", "50d": "🌫️", "50n": "🌫️"}
-    return icon_map.get(icon_code, "🌡️")
 
 def get_weather():
     if WEATHER_API_KEY:
@@ -67,38 +123,29 @@ def get_weather():
             url = f"http://api.openweathermap.org/data/2.5/weather?q=Spruce Grove,CA&appid={WEATHER_API_KEY}&units=metric"
             response = requests.get(url)
             data = response.json()
-            forecast_url = f"http://api.openweathermap.org/data/2.5/forecast?q=Spruce Grove,CA&appid={WEATHER_API_KEY}&units=metric"
-            forecast_response = requests.get(forecast_url)
-            forecast_data = forecast_response.json()
-            forecast = []
-            days_processed = set()
-            for item in forecast_data['list']:
-                date_str = item['dt_txt'].split()[0]
-                if date_str not in days_processed and len(forecast) < 5:
-                    days_processed.add(date_str)
-                    forecast.append({
-                        "day": datetime.strptime(date_str, '%Y-%m-%d').strftime('%a'),
-                        "high": round(item['main']['temp_max']),
-                        "low": round(item['main']['temp_min']),
-                        "condition": item['weather'][0]['description'].title(),
-                        "icon": get_weather_icon(item['weather'][0]['icon'])
-                    })
-            return {
-                "current": {"temp": round(data['main']['temp']), "feels_like": round(data['main']['feels_like']), "condition": data['weather'][0]['description'].title(), "humidity": data['main']['humidity'], "wind": round(data['wind']['speed']), "icon": get_weather_icon(data['weather'][0]['icon'])},
-                "forecast": forecast
-            }
+            return {"temp": round(data['main']['temp']), "condition": data['weather'][0]['description'].title(), "humidity": data['main']['humidity'], "wind": round(data['wind']['speed'])}
         except:
             pass
-    return {"current": {"temp": 18, "feels_like": 17, "condition": "Partly Cloudy", "humidity": 65, "wind": 15, "icon": "🌤️"}, "forecast": [{"day": "Mon", "high": 20, "low": 8, "condition": "Sunny", "icon": "☀️"}, {"day": "Tue", "high": 22, "low": 10, "condition": "Partly Cloudy", "icon": "⛅"}, {"day": "Wed", "high": 19, "low": 9, "condition": "Light Rain", "icon": "🌧️"}, {"day": "Thu", "high": 21, "low": 11, "condition": "Sunny", "icon": "☀️"}, {"day": "Fri", "high": 23, "low": 12, "condition": "Sunny", "icon": "☀️"}]}
+    return {"temp": 18, "condition": "Partly Cloudy", "humidity": 65, "wind": 15}
 
 def get_events():
-    return [{"name": "Farmers Market", "date": "Every Saturday", "location": "Downtown", "time": "10 AM - 3 PM"}, {"name": "City Council Meeting", "date": "Monday", "location": "City Hall", "time": "7 PM"}, {"name": "Library Story Time", "date": "Wednesday", "location": "Public Library", "time": "10:30 AM"}, {"name": "Community Clean-Up", "date": "May 10", "location": "Various Locations", "time": "9 AM - 2 PM"}]
+    return [
+        {"name": "Farmers Market", "date": "Every Saturday", "location": "Downtown", "time": "10 AM - 3 PM"},
+        {"name": "City Council Meeting", "date": "Monday", "location": "City Hall", "time": "7 PM"},
+        {"name": "Library Story Time", "date": "Wednesday", "location": "Public Library", "time": "10:30 AM"},
+        {"name": "Community Clean-Up", "date": "May 10", "location": "Various Locations", "time": "9 AM - 2 PM"}
+    ]
 
 def get_photo_gallery():
-    return [{"title": "Spring Festival", "caption": "Residents enjoying the annual Spring Festival", "image": "https://picsum.photos/id/104/800/500"}, {"title": "New Business Opening", "caption": "Main Street's newest local shop", "image": "https://picsum.photos/id/20/800/500"}, {"title": "Youth Sports", "caption": "Local soccer team in action", "image": "https://picsum.photos/id/128/800/500"}, {"title": "Community Volunteers", "caption": "Volunteers beautifying the park", "image": "https://picsum.photos/id/169/800/500"}]
+    return [
+        {"title": "Spring Festival", "caption": "Residents enjoying the annual Spring Festival", "image": "https://picsum.photos/id/104/800/500"},
+        {"title": "New Business Opening", "caption": "Main Street's newest local shop", "image": "https://picsum.photos/id/20/800/500"},
+        {"title": "Youth Sports", "caption": "Local soccer team in action", "image": "https://picsum.photos/id/128/800/500"},
+        {"title": "Community Volunteers", "caption": "Volunteers beautifying the park", "image": "https://picsum.photos/id/169/800/500"}
+    ]
 
 def get_letters():
-    conn = sqlite3.connect('gazette_archive.db')
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("SELECT author, subject, content, date FROM letters WHERE approved = 1 ORDER BY date DESC LIMIT 3")
     letters = cursor.fetchall()
@@ -108,7 +155,7 @@ def get_letters():
     return [{"author": "Margaret Thompson", "subject": "Thank You Volunteers", "content": "Thank you to all who made the Spring Festival a success!", "date": datetime.now().strftime("%B %d, %Y")}]
 
 def get_classifieds_by_category(category=None):
-    conn = sqlite3.connect('gazette_archive.db')
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     if category and category != 'all':
         cursor.execute("SELECT id, category, title, description, price, contact, date FROM classifieds WHERE category = ? AND active = 1 ORDER BY date DESC", (category,))
@@ -119,14 +166,17 @@ def get_classifieds_by_category(category=None):
     return [{"id": c[0], "category": c[1], "title": c[2], "description": c[3], "price": c[4], "contact": c[5], "date": c[6]} for c in classifieds]
 
 def search_articles(query):
-    conn = sqlite3.connect('gazette_archive.db')
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute("SELECT title, content, published_date, file_path FROM articles WHERE title LIKE ? OR content LIKE ? ORDER BY published_date DESC", (f'%{query}%', f'%{query}%'))
+    cursor.execute("SELECT title, content, published_date FROM articles WHERE title LIKE ? OR content LIKE ? ORDER BY published_date DESC", (f'%{query}%', f'%{query}%'))
     results = cursor.fetchall()
     conn.close()
-    return [{"title": r[0], "content": r[1][:200], "date": r[2], "file_path": r[3]} for r in results]
+    return [{"title": r[0], "content": r[1][:200], "date": r[2]} for r in results]
 
+# ============================================
 # PWA Routes
+# ============================================
+
 @app.route('/manifest.json')
 def manifest():
     manifest_data = {"name": NEWSPAPER_NAME, "short_name": "SG Gazette", "description": "Spruce Grove's trusted local news source", "start_url": "/", "display": "standalone", "theme_color": "#1a3d1a", "background_color": "#f9f9f5", "orientation": "portrait-primary", "icons": [{"src": "/static/icons/icon-72x72.png", "sizes": "72x72", "type": "image/png"}, {"src": "/static/icons/icon-96x96.png", "sizes": "96x96", "type": "image/png"}, {"src": "/static/icons/icon-128x128.png", "sizes": "128x128", "type": "image/png"}, {"src": "/static/icons/icon-144x144.png", "sizes": "144x144", "type": "image/png"}, {"src": "/static/icons/icon-152x152.png", "sizes": "152x152", "type": "image/png"}, {"src": "/static/icons/icon-192x192.png", "sizes": "192x192", "type": "image/png"}, {"src": "/static/icons/icon-384x384.png", "sizes": "384x384", "type": "image/png"}, {"src": "/static/icons/icon-512x512.png", "sizes": "512x512", "type": "image/png"}]}
@@ -146,7 +196,10 @@ def serve_icon(filename):
     svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#1a3d1a"/><text x="50" y="50" text-anchor="middle" dy=".3em" fill="white" font-size="40">📰</text></svg>'
     return app.response_class(svg, mimetype='image/svg+xml')
 
-# Main Route
+# ============================================
+# Main Route - Homepage
+# ============================================
+
 @app.route('/')
 def home():
     total_articles = get_article_count()
@@ -156,8 +209,8 @@ def home():
     gallery = get_photo_gallery()
     letters = get_letters()
     recent_classifieds = get_classifieds_by_category('all')[:4]
+    latest_article = get_latest_article_from_db()
     
-    forecast_html = ''.join([f'<div class="forecast-day"><div class="forecast-day-name">{f["day"]}</div><div class="forecast-icon">{f["icon"]}</div><div class="forecast-temp">{f["high"]}&deg; / {f["low"]}&deg;</div><div style="font-size: 10px; opacity: 0.8;">{f["condition"][:10]}</div></div>' for f in weather['forecast']])
     gallery_html = ''.join([f'<div class="gallery-item"><img src="{p["image"]}" alt="{p["title"]}" loading="lazy"><p><strong>{p["title"]}</strong><br>{p["caption"]}</p></div>' for p in gallery])
     letters_html = ''.join([f'<div style="margin-bottom: 20px;"><strong>{l["subject"]}</strong><br>"{l["content"]}"<br><em>— {l["author"]}</em><br><small>{l["date"]}</small></div>' for l in letters])
     events_html = ''.join([f'<li style="padding: 10px 0; border-bottom: 1px solid #eee;"><strong>{e["name"]}</strong><br>{e["date"]} at {e["time"]}<br>📍 {e["location"]}</li>' for e in events])
@@ -275,14 +328,18 @@ def home():
     <div class="top-bar">🌿 Spruce Grove's Primary Resource for Trade & Employment | "Your Hometown, Online."</div>
     <div class="header"><div class="logo"><h1>📰 {NEWSPAPER_NAME}</h1><p>ESTABLISHED {LAUNCH_DATE} | INDEPENDENT & LOCAL</p><div class="tagline">"Your Hometown, Online." • Spruce Grove's Primary Resource for Trade & Employment</div></div></div>
     <div class="date-header">📍 Spruce Grove, Alberta | {datetime.now().strftime('%A, %B %d, %Y')}</div>
-    <div class="nav"><a href="/">🏠 HOME</a><a href="/latest">📰 GAZETTE DISPATCHES</a><a href="/classifieds">📋 CLASSIFIEDS</a><a href="/search">🔍 SEARCH</a><a href="/post-ad">📝 POST AN AD</a><a href="/subscribe">✉️ NEWSLETTER</a></div>
+    <div class="nav"><a href="/">🏠 HOME</a><a href="/latest">📰 LATEST DISPATCH</a><a href="/classifieds">📋 CLASSIFIEDS</a><a href="/search">🔍 SEARCH</a><a href="/post-ad">📝 POST AN AD</a><a href="/subscribe">✉️ NEWSLETTER</a></div>
     <div class="hero"><h2>Your Hometown, Online.</h2><p>Spruce Grove's Primary Resource for Trade & Employment</p><form class="search-bar" action="/search" method="GET"><input type="text" name="q" placeholder="Search Gazette dispatches, events, and archives..." required><button type="submit"><i class="fas fa-search"></i> Search</button></form></div>
     <div class="main-content">
-        <div class="stats-grid"><div class="stat-card"><i class="fas fa-newspaper"></i><div class="stat-number">{total_articles}</div><div>Dispatches</div></div><div class="stat-card"><i class="fas fa-tags"></i><div class="stat-number">5</div><div>Categories</div></div><div class="stat-card"><i class="fas fa-users"></i><div class="stat-number">{subscriber_count}</div><div>Readers</div></div><div class="stat-card"><i class="fas fa-clock"></i><div class="stat-number">8 AM</div><div>Daily Delivery</div></div></div>
+        <div class="stats-grid"><div class="stat-card"><i class="fas fa-newspaper"></i><div class="stat-number">{total_articles}</div><div>Dispatches</div></div><div class="stat-card"><i class="fas fa-tags"></i><div class="stat-number">5</div><div>Categories</div></div><div class="stat-card"><i class="fas fa-users"></i><div class="stat-number">{subscriber_count}</div><div>Readers</div></div><div class="stat-card"><i class="fas fa-clock"></i><div class="stat-number">5 AM</div><div>Daily Delivery</div></div></div>
         <div class="two-column">
             <div>
-                <h2 class="section-title">📰 Latest Gazette Dispatches</h2>
-                <div class="feature-card"><h3>Welcome to the Spruce Grove Gazette</h3><p>Serving Spruce Grove with trusted local news coverage.</p><a href="/latest" class="btn">Read Latest Dispatch →</a></div>
+                <h2 class="section-title">📰 Latest Gazette Dispatch</h2>
+                <div class="feature-card">
+                    <h3>{latest_article['title'] if latest_article else 'Welcome to the Spruce Grove Gazette'}</h3>
+                    <p>{latest_article['content'][:300] + '...' if latest_article else 'Serving Spruce Grove with trusted local news coverage. From city council to high school sports, community events to business openings — we have got Spruce Grove covered.'}</p>
+                    <a href="/latest" class="btn">Read Latest Dispatch →</a>
+                </div>
                 <h2 class="section-title">📸 Community Photos</h2>
                 <div class="photo-gallery">{gallery_html}</div>
                 <h2 class="section-title">✉️ Letters to the Editor</h2>
@@ -292,10 +349,10 @@ def home():
                 <div class="weather-widget">
                     <div class="weather-header"><h3><i class="fas fa-map-marker-alt"></i> Spruce Grove, AB</h3><span>{datetime.now().strftime('%A, %B %d')}</span></div>
                     <div class="current-weather">
-                        <div class="weather-main"><div class="weather-icon">{weather['current']['icon']}</div><div class="weather-temp">{weather['current']['temp']}<small>°C</small></div><div class="feels-like">Feels like {weather['current']['feels_like']}°C</div><div class="weather-condition">{weather['current']['condition']}</div></div>
-                        <div class="weather-details"><div class="weather-detail-item"><i class="fas fa-tint"></i><span>Humidity: {weather['current']['humidity']}%</span></div><div class="weather-detail-item"><i class="fas fa-wind"></i><span>Wind: {weather['current']['wind']} km/h</span></div><div class="weather-detail-item"><i class="fas fa-sun"></i><span>UV Index: Moderate</span></div><div class="weather-detail-item"><i class="fas fa-eye"></i><span>Visibility: 16 km</span></div></div>
+                        <div class="weather-main"><div class="weather-icon">🌤️</div><div class="weather-temp">{weather['temp']}<small>°C</small></div><div class="feels-like">Feels like {weather['temp']}°C</div><div class="weather-condition">{weather['condition']}</div></div>
+                        <div class="weather-details"><div class="weather-detail-item"><i class="fas fa-tint"></i><span>Humidity: {weather['humidity']}%</span></div><div class="weather-detail-item"><i class="fas fa-wind"></i><span>Wind: {weather['wind']} km/h</span></div></div>
                     </div>
-                    <div class="forecast-container"><div class="forecast-title">5-DAY FORECAST</div><div class="forecast-grid">{forecast_html}</div></div>
+                    <div class="forecast-container"><div class="forecast-title">5-DAY FORECAST</div><div class="forecast-grid"><div class="forecast-day"><div class="forecast-day-name">Mon</div><div class="forecast-icon">☀️</div><div class="forecast-temp">20&deg; / 8&deg;</div></div><div class="forecast-day"><div class="forecast-day-name">Tue</div><div class="forecast-icon">⛅</div><div class="forecast-temp">22&deg; / 10&deg;</div></div><div class="forecast-day"><div class="forecast-day-name">Wed</div><div class="forecast-icon">🌧️</div><div class="forecast-temp">19&deg; / 9&deg;</div></div><div class="forecast-day"><div class="forecast-day-name">Thu</div><div class="forecast-icon">☀️</div><div class="forecast-temp">21&deg; / 11&deg;</div></div><div class="forecast-day"><div class="forecast-day-name">Fri</div><div class="forecast-icon">☀️</div><div class="forecast-temp">23&deg; / 12&deg;</div></div></div></div>
                 </div>
                 <h2 class="section-title">📅 Upcoming Events</h2>
                 <div class="feature-card"><ul style="list-style: none;">{events_html}</ul></div>
@@ -309,8 +366,8 @@ def home():
         <div class="social-section"><h3>📱 Follow The Gazette</h3><div class="social-links"><a href="https://twitter.com/intent/tweet?text=Spruce Grove Gazette&url=https://sprucegrovegazette.com" class="social-btn twitter"><i class="fab fa-twitter"></i> Twitter</a><a href="https://www.facebook.com/sharer/sharer.php?u=https://sprucegrovegazette.com" class="social-btn facebook"><i class="fab fa-facebook-f"></i> Facebook</a><a href="https://www.linkedin.com/sharing/share-offsite/?url=https://sprucegrovegazette.com" class="social-btn linkedin"><i class="fab fa-linkedin-in"></i> LinkedIn</a><a href="mailto:?subject=Spruce Grove Gazette&body=Check this out: https://sprucegrovegazette.com" class="social-btn email"><i class="fas fa-envelope"></i> Email</a></div></div>
     </div>
     <div class="footer">
-        <div class="footer-content"><div class="footer-column"><h4>📰 The Gazette</h4><a href="/">Home</a><a href="/latest">Dispatches</a><a href="/classifieds">Classifieds</a><a href="/search">Search Archives</a><a href="/subscribe">Newsletter</a></div><div class="footer-column"><h4>📬 Connect</h4><a href="/post-ad">Post an Ad</a><a href="/submit-letter">Submit a Letter</a><a href="mailto:editor@sprucegrovegazette.com">editor@sprucegrovegazette.com</a><a href="#">Advertising</a></div><div class="footer-column"><h4>🔗 Categories</h4><a href="/classifieds?category=jobs">Jobs</a><a href="/classifieds?category=sale">For Sale</a><a href="/classifieds?category=housing">Housing</a><a href="/classifieds?category=services">Services</a><a href="/classifieds?category=garage">Garage Sales</a></div><div class="footer-column"><h4>📍 Location</h4><a href="#">Spruce Grove, Alberta</a><a href="#">Canada T7X 0A1</a><a href="#">"Your Hometown, Online."</a></div></div>
-        <div class="copyright"><p>© {LAUNCH_YEAR} {NEWSPAPER_NAME}. All rights reserved.</p><p>Proudly serving Spruce Grove since {LAUNCH_DATE} | {TAGLINE}</p></div>
+        <div class="footer-content"><div class="footer-column"><h4>📰 The Gazette</h4><a href="/">Home</a><a href="/latest">Latest Dispatch</a><a href="/classifieds">Classifieds</a><a href="/search">Search Archives</a><a href="/subscribe">Newsletter</a></div><div class="footer-column"><h4>📬 Connect</h4><a href="/post-ad">Post an Ad</a><a href="/submit-letter">Submit a Letter</a><a href="mailto:editor@sprucegrovegazette.com">editor@sprucegrovegazette.com</a></div><div class="footer-column"><h4>🔗 Categories</h4><a href="/classifieds?category=jobs">Jobs</a><a href="/classifieds?category=sale">For Sale</a><a href="/classifieds?category=housing">Housing</a><a href="/classifieds?category=services">Services</a><a href="/classifieds?category=garage">Garage Sales</a></div><div class="footer-column"><h4>📍 Location</h4><a href="#">Spruce Grove, Alberta</a><a href="#">"Your Hometown, Online."</a></div></div>
+        <div class="copyright"><p>© {LAUNCH_YEAR} {NEWSPAPER_NAME}. All rights reserved.</p><p>Proudly serving Spruce Grove since {LAUNCH_DATE}</p></div>
     </div>
     <script>
         let deferredPrompt;
@@ -322,13 +379,68 @@ def home():
 </body>
 </html>'''
 
-# Additional Routes
+# ============================================
+# Latest Dispatch Route - FROM DATABASE
+# ============================================
+
 @app.route('/latest')
 def latest_article():
-    latest = get_latest_article()
-    if latest:
-        return send_file(latest)
-    return '<h1>First Dispatch Coming Soon</h1><p>Check back soon!</p><a href="/">Back to Home</a>'
+    """Serve the latest generated article from database"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT title, content, published_date FROM articles ORDER BY published_date DESC LIMIT 1")
+    result = cursor.fetchone()
+    conn.close()
+    
+    if result:
+        title, content, date_published = result
+        return f'''
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>{title} - {NEWSPAPER_NAME}</title>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <style>
+                body {{ font-family: Georgia, 'Times New Roman', serif; max-width: 800px; margin: 0 auto; padding: 20px; line-height: 1.6; background: #f9f9f5; }}
+                h1 {{ color: #1a3d1a; border-bottom: 3px solid #D4A017; padding-bottom: 10px; }}
+                h2 {{ color: #2C5F2D; margin-top: 30px; }}
+                h3 {{ color: #4A7C4B; margin-top: 20px; }}
+                .meta {{ color: #666; border-bottom: 1px solid #ddd; padding-bottom: 10px; margin-bottom: 20px; }}
+                .footer {{ margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; text-align: center; font-size: 12px; color: #999; }}
+                .btn {{ display: inline-block; background: #1a3d1a; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 20px; }}
+                blockquote {{ border-left: 4px solid #D4A017; margin: 20px 0; padding-left: 20px; font-style: italic; }}
+            </style>
+        </head>
+        <body>
+            <h1>📰 {NEWSPAPER_NAME}</h1>
+            <div class="meta">📍 Spruce Grove, AB | 📅 {date_published}</div>
+            {content}
+            <div class="footer">
+                <p>— The Spruce Grove Gazette</p>
+                <p>Your Hometown, Online | Established {LAUNCH_DATE}</p>
+                <a href="/" class="btn">← Back to Home</a>
+            </div>
+        </body>
+        </html>
+        '''
+    
+    return '''
+    <!DOCTYPE html>
+    <html>
+    <head><title>First Dispatch Coming Soon</title></head>
+    <body style="font-family: Georgia, serif; text-align: center; padding: 50px; background: #f9f9f5;">
+        <h1 style="color: #1a3d1a;">📰 First Dispatch Coming Soon</h1>
+        <p>The AI newsroom is preparing the first edition. The bot runs daily at 5:00 AM MT.</p>
+        <p>Check back after 5:00 AM tomorrow!</p>
+        <a href="/" style="color: #1a3d1a;">← Back to Home</a>
+    </body>
+    </html>
+    '''
+
+# ============================================
+# Additional Routes
+# ============================================
 
 @app.route('/classifieds')
 def classifieds():
@@ -348,7 +460,7 @@ def post_ad():
         price = request.form.get('price')
         contact = request.form.get('contact')
         email = request.form.get('email')
-        conn = sqlite3.connect('gazette_archive.db')
+        conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         cursor.execute("INSERT INTO classifieds (category, title, description, price, contact, email, date, active) VALUES (?, ?, ?, ?, ?, ?, ?, 1)", (category, title, description, price, contact, email, date.today()))
         conn.commit()
@@ -360,8 +472,8 @@ def post_ad():
 def search():
     query = request.args.get('q', '')
     results = search_articles(query) if query else []
-    results_html = ''.join([f'<div class="result-card"><h3>{r["title"]}</h3><p>{r["content"]}...</p><div class="result-date">Date: {r["date"]}</div><a href="{r["file_path"]}" class="btn">Read Dispatch →</a></div>' for r in results])
-    return f'''<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Search - {NEWSPAPER_NAME}</title><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"><style>body{{font-family:Georgia;background:#f9f9f5;margin:0;}}.header{{background:#1a3d1a;color:white;padding:20px;text-align:center;}}.nav{{background:#2C5F2D;padding:15px;text-align:center;}}.nav a{{color:white;margin:0 15px;text-decoration:none;}}.container{{max-width:800px;margin:0 auto;padding:40px 20px;}}.search-box{{background:white;padding:30px;border-radius:10px;margin-bottom:30px;}}.search-box input{{width:70%;padding:12px;border:1px solid #ddd;border-radius:5px;}}.search-box button{{background:#1a3d1a;color:white;padding:12px 24px;border:none;border-radius:5px;cursor:pointer;}}.result-card{{background:white;padding:20px;border-radius:10px;margin-bottom:20px;box-shadow:0 2px 4px rgba(0,0,0,0.1);}}.result-date{{color:#666;font-size:12px;}}.btn{{display:inline-block;background:#1a3d1a;color:white;padding:8px 16px;text-decoration:none;border-radius:5px;margin-top:10px;}}.footer{{background:#0d260d;color:white;text-align:center;padding:30px;margin-top:40px;}}</style></head><body><div class="header"><h1>📰 {NEWSPAPER_NAME}</h1><p>Search Dispatches and Archives</p></div><div class="nav"><a href="/">🏠 Home</a><a href="/latest">📰 Dispatches</a><a href="/classifieds">📋 Classifieds</a></div><div class="container"><div class="search-box"><form method="GET"><input type="text" name="q" value="{query}" placeholder="Search Gazette dispatches, events, and archives..." required><button type="submit"><i class="fas fa-search"></i> Search</button></form></div>{results_html if results else f'<p style="text-align:center;">{"No results found. Try different keywords." if query else "Enter search terms above."}</p>'}</div><div class="footer"><p>© {LAUNCH_YEAR} {NEWSPAPER_NAME} | "Your Hometown, Online."</p></div></body></html>'''
+    results_html = ''.join([f'<div class="result-card"><h3>{r["title"]}</h3><p>{r["content"]}...</p><div class="result-date">Date: {r["date"]}</div><a href="/latest" class="btn">Read Dispatch →</a></div>' for r in results])
+    return f'''<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Search - {NEWSPAPER_NAME}</title><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"><style>body{{font-family:Georgia;background:#f9f9f5;margin:0;}}.header{{background:#1a3d1a;color:white;padding:20px;text-align:center;}}.nav{{background:#2C5F2D;padding:15px;text-align:center;}}.nav a{{color:white;margin:0 15px;text-decoration:none;}}.container{{max-width:800px;margin:0 auto;padding:40px 20px;}}.search-box{{background:white;padding:30px;border-radius:10px;margin-bottom:30px;}}.search-box input{{width:70%;padding:12px;border:1px solid #ddd;border-radius:5px;}}.search-box button{{background:#1a3d1a;color:white;padding:12px 24px;border:none;border-radius:5px;cursor:pointer;}}.result-card{{background:white;padding:20px;border-radius:10px;margin-bottom:20px;box-shadow:0 2px 4px rgba(0,0,0,0.1);}}.result-date{{color:#666;font-size:12px;}}.btn{{display:inline-block;background:#1a3d1a;color:white;padding:8px 16px;text-decoration:none;border-radius:5px;margin-top:10px;}}.footer{{background:#0d260d;color:white;text-align:center;padding:30px;margin-top:40px;}}</style></head><body><div class="header"><h1>📰 {NEWSPAPER_NAME}</h1><p>Search Dispatches and Archives</p></div><div class="nav"><a href="/">🏠 Home</a><a href="/latest">📰 Dispatches</a><a href="/classifieds">📋 Classifieds</a></div><div class="container"><div class="search-box"><form method="GET"><input type="text" name="q" value="{query}" placeholder="Search Gazette dispatches..." required><button type="submit"><i class="fas fa-search"></i> Search</button></form></div>{results_html if results else f'<p style="text-align:center;">{"No results found." if query else "Enter search terms above."}</p>'}</div><div class="footer"><p>© {LAUNCH_YEAR} {NEWSPAPER_NAME}</p></div></body></html>'''
 
 @app.route('/submit-letter', methods=['GET', 'POST'])
 def submit_letter():
@@ -369,7 +481,7 @@ def submit_letter():
         author = request.form.get('author')
         subject = request.form.get('subject')
         content = request.form.get('content')
-        conn = sqlite3.connect('gazette_archive.db')
+        conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         cursor.execute("INSERT INTO letters (author, subject, content, date, approved) VALUES (?, ?, ?, ?, 0)", (author, subject, content, date.today()))
         conn.commit()
@@ -383,7 +495,7 @@ def subscribe():
         email = request.form.get('email')
         name = request.form.get('name', '')
         if email:
-            conn = sqlite3.connect('gazette_archive.db')
+            conn = sqlite3.connect(DB_PATH)
             cursor = conn.cursor()
             try:
                 cursor.execute("INSERT INTO subscribers (email, name, subscribed_date, active) VALUES (?, ?, ?, 1)", (email, name, date.today()))
@@ -396,7 +508,7 @@ def subscribe():
 
 @app.route('/rss')
 def rss_feed():
-    conn = sqlite3.connect('gazette_archive.db')
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("SELECT title, content, published_date FROM articles ORDER BY published_date DESC LIMIT 10")
     articles = cursor.fetchall()
@@ -410,7 +522,7 @@ def health():
 
 @app.route('/api/status')
 def api_status():
-    return jsonify({"name": NEWSPAPER_NAME, "schedule": "Daily at 8:00 AM MT", "total_articles": get_article_count(), "subscribers": get_subscriber_count()})
+    return jsonify({"name": NEWSPAPER_NAME, "schedule": "Daily at 5:00 AM MT", "total_articles": get_article_count(), "subscribers": get_subscriber_count()})
 
 @app.route('/sitemap.xml')
 def sitemap():
