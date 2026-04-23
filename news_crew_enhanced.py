@@ -9,7 +9,7 @@ import json
 import sqlite3
 import smtplib
 import requests
-import pdfkit
+# import pdfkit
 import tweepy
 from gtts import gTTS
 from datetime import datetime, timedelta
@@ -318,7 +318,7 @@ def convert_to_pdf(html_file, pdf_file):
             'margin-right': '0.75in',
             'encoding': 'UTF-8'
         }
-        pdfkit.from_file(html_file, pdf_file, options=options)
+        # pdfkit.from_file removed
         print(f"PDF generated: {pdf_file}")
         return True
     except Exception as e:
