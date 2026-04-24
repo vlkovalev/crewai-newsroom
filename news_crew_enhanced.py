@@ -1,10 +1,11 @@
 """
-Spruce Grove Gazette - AI Newsroom (Simplified)
-No external dependencies - runs reliably on Render
+Spruce Grove Gazette - AI Newsroom
+Generates local news articles for Spruce Grove, Alberta
 """
 
 import os
 import re
+import sqlite3
 from datetime import datetime
 from crewai import Agent, Task, Crew, Process
 from dotenv import load_dotenv
@@ -17,6 +18,11 @@ load_dotenv()
 # ============================================
 
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', '')
+DB_PATH = 'gazette_archive.db'
+
+# Print debug info
+print(f"Current working directory: {os.getcwd()}")
+print(f"Files in directory before run: {os.listdir('.')}")
 
 # Check if OpenAI API key is set
 if not OPENAI_API_KEY:
@@ -24,6 +30,46 @@ if not OPENAI_API_KEY:
     exit(1)
 
 print("OpenAI API key found")
+
+# ============================================
+# Database Setup
+# ============================================
+
+def init_database():
+    """Initialize SQLite database for storing articles"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS articles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT,
+            content TEXT,
+            file_path TEXT,
+            published_date DATE,
+            word_count INTEGER
+        )
+    ''')
+    conn.commit()
+    conn.close()
+    print("Database initialized")
+
+def save_article_to_db(title, content, file_path):
+    """Save article to database"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    word_count = len(content.split())
+    cursor.execute('''
+        INSERT INTO articles (title, content, file_path, published_date, word_count)
+        VALUES (?, ?, ?, ?, ?)
+    ''', (title, content, file_path, datetime.now().date(), word_count))
+    article_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    print(f"Article saved to database with ID: {article_id}")
+    return article_id
+
+# Initialize database
+init_database()
 
 # ============================================
 # Gazette Style Guide
@@ -81,7 +127,7 @@ fact_checker = Agent(
     allow_delegation=False
 )
 
-# Agent 3: Writer (with Gazette style)
+# Agent 3: Writer
 writer = Agent(
     role="News Writer",
     goal="Write engaging, well-structured news articles in the Spruce Grove Gazette voice",
@@ -115,15 +161,14 @@ headline_writer = Agent(
     allow_delegation=False
 )
 
-print("5 Agents created: Researcher, Fact-Checker, Writer, Editor, Headline Specialist")
+print("5 Agents created")
 
 # ============================================
-# Define Enhanced Tasks
+# Define Tasks
 # ============================================
 
 print("Creating tasks...")
 
-# Task 1: Research
 research_task = Task(
     description=f"""Research current local news about Spruce Grove, Alberta for {datetime.now().strftime('%B %d, %Y')}.
 
@@ -134,34 +179,19 @@ research_task = Task(
     - Community spotlight (local heroes, volunteers, organizations)
     - City council decisions and development projects
     
-    For each story, collect:
-    - What happened (key facts)
-    - When it happened or will happen (dates)
-    - Where (location within Spruce Grove)
-    - Who is involved (people, organizations)
-    - Why it matters to residents
+    For each story, provide key facts, dates, locations, and why it matters to residents.
     """,
     agent=researcher,
-    expected_output="A detailed research report with 3-5 local news stories including all key facts, dates, locations, and why they matter to residents."
+    expected_output="A detailed research report with 3-5 local news stories."
 )
 
-# Task 2: Fact Check
 fact_check_task = Task(
-    description="""Review the research and verify every fact:
-    
-    - Check all dates are correct and in the proper format
-    - Verify all names are spelled correctly
-    - Confirm all locations exist in Spruce Grove
-    - Ensure sources are credible
-    - Flag any unverified claims
-    
-    Make corrections where needed and note any unresolved questions.
+    description="""Review the research and verify every fact: dates, names, locations. Make corrections where needed.
     """,
     agent=fact_checker,
-    expected_output="A verified research report with all facts confirmed and any issues flagged."
+    expected_output="A verified research report with all facts confirmed."
 )
 
-# Task 3: Write Article
 writing_task = Task(
     description="""Write a complete news article based on the verified research.
 
@@ -174,50 +204,24 @@ writing_task = Task(
     - Local impact section
     - Forward-looking closing statement
     
-    Format as clean HTML with:
-    - <h2> for headline
-    - <p> for paragraphs
-    - <em> for emphasis when appropriate
-    - <blockquote> for any quotes
-    
-    Keep the tone warm, professional, and community-focused.
+    Format as clean HTML with <h2>, <p>, and <em> tags.
     """,
     agent=writer,
-    expected_output="A complete HTML news article following Gazette style guidelines, ready for editing."
+    expected_output="A complete HTML news article ready for editing."
 )
 
-# Task 4: Edit
 editing_task = Task(
-    description="""Review and polish the article:
-    
-    - Fix grammar, spelling, and punctuation
-    - Ensure consistent style and tone
-    - Verify proper HTML formatting
-    - Add transitions between paragraphs
-    - Ensure the article flows well
-    - Remove any redundant or weak phrases
-    
-    Make the article as strong as possible before final review.
+    description="""Polish the article: fix grammar, ensure flow, verify HTML formatting.
     """,
     agent=editor,
     expected_output="A polished, publication-ready HTML article."
 )
 
-# Task 5: Headline
 headline_task = Task(
-    description="""Create 3 compelling headline options for the article.
-    
-    Each headline should:
-    - Be 8-12 words maximum
-    - Capture the most newsworthy element
-    - Use active voice
-    - Be clear and accurate
-    - Make readers want to learn more
-    
-    Select the best one as the final <h2> headline.
+    description="""Create 3 compelling headline options and select the best as final <h2>.
     """,
     agent=headline_writer,
-    expected_output="3 headline options with the best one selected as the final <h2> headline."
+    expected_output="3 headline options with best one selected as final <h2>."
 )
 
 print("5 Tasks created")
@@ -238,7 +242,6 @@ print("Spruce Grove Gazette - AI Newsroom")
 print("="*60)
 print(f"Date: {datetime.now().strftime('%B %d, %Y')}")
 print(f"Location: Spruce Grove, Alberta")
-print(f"Agents: Researcher → Fact-Checker → Writer → Editor → Headline")
 print("="*60)
 print("\nGenerating article with AI newsroom...\n")
 
@@ -253,12 +256,12 @@ title_match = re.search(r'<h2[^>]*>(.*?)</h2>', article_html)
 title = title_match.group(1) if title_match else "Spruce Grove Gazette Daily Dispatch"
 
 print("\n" + "="*60)
-print("Final Article:")
+print("Final Article Content:")
 print("="*60)
 print(article_html)
 print("="*60)
 
-# Save the article
+# Save the article as HTML file
 output_file = f"spruce_grove_gazette_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
 with open(output_file, "w", encoding="utf-8") as f:
     f.write(f"""<!DOCTYPE html>
@@ -268,16 +271,17 @@ with open(output_file, "w", encoding="utf-8") as f:
     <title>Spruce Grove Gazette - {datetime.now().strftime('%B %d, %Y')}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
-        body {{ font-family: Georgia, 'Times New Roman', serif; max-width: 800px; margin: 0 auto; padding: 20px; line-height: 1.6; }}
+        body {{ font-family: Georgia, 'Times New Roman', serif; max-width: 800px; margin: 0 auto; padding: 20px; line-height: 1.6; background: #f9f9f5; }}
         h1, h2 {{ color: #2C5F2D; }}
+        h3 {{ color: #4A7C4B; }}
         .meta {{ color: #666; font-size: 0.9em; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 20px; }}
         .footer {{ margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee; font-size: 0.8em; color: #999; text-align: center; }}
         blockquote {{ border-left: 4px solid #2C5F2D; margin: 20px 0; padding-left: 20px; font-style: italic; }}
     </style>
 </head>
 <body>
-    <h1>Spruce Grove Gazette</h1>
-    <div class="meta">Spruce Grove, AB | {datetime.now().strftime('%B %d, %Y')}</div>
+    <h1>📰 Spruce Grove Gazette</h1>
+    <div class="meta">📍 Spruce Grove, AB | 📅 {datetime.now().strftime('%B %d, %Y')}</div>
     {article_html}
     <div class="footer">
         <p>— The Spruce Grove Gazette</p>
@@ -287,6 +291,13 @@ with open(output_file, "w", encoding="utf-8") as f:
 </html>""")
 
 print(f"\nArticle saved to: {output_file}")
+
+# Save to database
+save_article_to_db(title, article_html, output_file)
+
+# Print all files after generation to see what was created
+print(f"\nFiles in directory after run: {os.listdir('.')}")
+
 print("\n" + "="*60)
 print("AI Newsroom session complete!")
 print("Spruce Grove Gazette is ready to publish!")
