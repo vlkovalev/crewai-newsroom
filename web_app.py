@@ -1,10 +1,11 @@
 """
-Spruce Grove Gazette - Simple Working Version
+Spruce Grove Gazette - Complete Working Version
 """
 
 import os
-import requests
+import json
 import subprocess
+import re
 from datetime import datetime
 from flask import Flask, jsonify
 
@@ -13,11 +14,25 @@ app = Flask(__name__)
 NEWSPAPER_NAME = "The Spruce Grove Gazette"
 LAUNCH_DATE = "April 2026"
 LAUNCH_YEAR = 2026
+ARTICLE_FILE = 'latest_article.json'
 
-# Store the latest article in memory
-latest_article_html = None
-latest_article_title = "Welcome to the Spruce Grove Gazette"
-latest_article_date = datetime.now().strftime('%B %d, %Y')
+def save_article(title, html_content, date):
+    """Save article to JSON file"""
+    article_data = {
+        'title': title,
+        'html': html_content,
+        'date': date
+    }
+    with open(ARTICLE_FILE, 'w', encoding='utf-8') as f:
+        json.dump(article_data, f)
+    print(f"Article saved: {title}")
+
+def load_article():
+    """Load article from JSON file"""
+    if os.path.exists(ARTICLE_FILE):
+        with open(ARTICLE_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    return None
 
 def get_weather():
     return {"temp": 18, "condition": "Partly Cloudy"}
@@ -56,7 +71,8 @@ def home():
         <div class="nav">
             <a href="/">HOME</a>
             <a href="/latest">LATEST DISPATCH</a>
-            <a href="/run-bot">RUN BOT NOW</a>
+            <a href="/run-bot">🤖 GENERATE NEWS</a>
+            <a href="/create-test">📝 CREATE TEST</a>
         </div>
         <div class="main">
             <div class="hero">
@@ -81,14 +97,14 @@ def home():
 @app.route('/latest')
 def latest():
     """Display the latest article"""
-    global latest_article_html, latest_article_title, latest_article_date
+    article = load_article()
     
-    if latest_article_html:
+    if article:
         return f'''
         <!DOCTYPE html>
         <html>
         <head>
-            <title>{latest_article_title} - {NEWSPAPER_NAME}</title>
+            <title>{article['title']} - {NEWSPAPER_NAME}</title>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1">
             <style>
@@ -103,11 +119,11 @@ def latest():
         </head>
         <body>
             <h1>📰 {NEWSPAPER_NAME}</h1>
-            <div class="meta">📍 Spruce Grove, AB | 📅 {latest_article_date}</div>
-            {latest_article_html}
+            <div class="meta">📍 Spruce Grove, AB | 📅 {article['date']}</div>
+            {article['html']}
             <div class="footer">
                 <a href="/" class="btn">← Back to Home</a>
-                <a href="/run-bot" class="btn" style="background: #D4A017; color: #1a3d1a;">↻ Generate New Article</a>
+                <a href="/run-bot" class="btn" style="background: #D4A017; color: #1a3d1a;">↻ Generate Fresh News</a>
             </div>
         </body>
         </html>
@@ -129,9 +145,6 @@ def latest():
 @app.route('/run-bot')
 def run_bot():
     """Run the news generation bot"""
-    import subprocess
-    import re
-    
     try:
         # Run the news generation script
         result = subprocess.run(['python', 'news_crew_enhanced.py'], 
@@ -141,19 +154,19 @@ def run_bot():
         
         output = result.stdout
         
-        # Extract the article HTML from the output
-        article_match = re.search(r'<h2[^>]*>.*?</h2>.*?<p>.*?</p>.*?<p>.*?</p>', output, re.DOTALL)
+        # Try to extract article HTML from the output
+        # Look for the article content between the === Final Article: === lines
+        article_match = re.search(r'Final Article:\n=+\n(.*?)\n=+', output, re.DOTALL)
         
         if article_match:
-            global latest_article_html, latest_article_title, latest_article_date
-            latest_article_html = article_match.group(0)
+            article_html = article_match.group(1)
             
-            # Extract title
-            title_match = re.search(r'<h2[^>]*>(.*?)</h2>', latest_article_html)
-            if title_match:
-                latest_article_title = title_match.group(1)
+            # Extract title from h2 tag
+            title_match = re.search(r'<h2[^>]*>(.*?)</h2>', article_html)
+            title = title_match.group(1) if title_match else "Spruce Grove Gazette Dispatch"
             
-            latest_article_date = datetime.now().strftime('%B %d, %Y')
+            # Save the article
+            save_article(title, article_html, datetime.now().strftime('%B %d, %Y'))
             
             return f'''
             <!DOCTYPE html>
@@ -162,20 +175,21 @@ def run_bot():
             <body style="font-family: Georgia; text-align: center; padding: 50px;">
                 <h1 style="color: #1a3d1a;">✅ Article Generated Successfully!</h1>
                 <p>The latest dispatch has been created.</p>
+                <p><strong>Title:</strong> {title}</p>
                 <a href="/latest" style="background: #1a3d1a; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; display: inline-block; margin-top: 20px;">📰 Read Latest Dispatch →</a>
                 <p><a href="/">← Back to Home</a></p>
             </body>
             </html>
             '''
         
+        # If no article found, show the output for debugging
         return f'''
         <!DOCTYPE html>
         <html>
-        <head><title>Generation Issue</title></head>
-        <body style="font-family: Georgia; text-align: center; padding: 50px;">
-            <h1>⚠️ Issue Generating Article</h1>
-            <p>The bot ran but didn't produce expected output. Check logs.</p>
-            <pre style="text-align: left; background: #f0f0f0; padding: 20px; overflow: auto;">{output[:500]}</pre>
+        <head><title>Generation Output</title></head>
+        <body style="font-family: Georgia; padding: 20px;">
+            <h1>Bot Output</h1>
+            <pre style="background: #f0f0f0; padding: 20px; overflow: auto;">{output[:2000]}</pre>
             <a href="/">← Back to Home</a>
         </body>
         </html>
@@ -194,14 +208,11 @@ def run_bot():
         </html>
         '''
 
-@app.route('/create-test-article')
-def create_test_article():
-    """Create a simple test article without running the full bot"""
-    global latest_article_html, latest_article_title, latest_article_date
-    
-    latest_article_title = "Spruce Grove Gazette - Test Edition"
-    latest_article_date = datetime.now().strftime('%B %d, %Y')
-    latest_article_html = """
+@app.route('/create-test')
+def create_test():
+    """Create a test article"""
+    test_title = "Spruce Grove Gazette - Test Edition"
+    test_html = """
     <h2>Welcome to the Spruce Grove Gazette!</h2>
     <p>Spruce Grove, AB — The Spruce Grove Gazette is officially launching today, bringing AI-powered local news to our community.</p>
     <h3>What We Cover</h3>
@@ -213,10 +224,12 @@ def create_test_article():
         <li>Community events and volunteer spotlights</li>
         <li>City council updates and development projects</li>
     </ul>
-    <h3>Coming Soon</h3>
-    <p>The first full AI-generated dispatch will appear here shortly. Our team is working to bring you the best local coverage.</p>
+    <h3>Stay Connected</h3>
+    <p>Subscribe to our newsletter to receive the Gazette directly in your inbox every morning at 5:00 AM.</p>
     <p>— The Spruce Grove Gazette</p>
     """
+    
+    save_article(test_title, test_html, datetime.now().strftime('%B %d, %Y'))
     
     return '''
     <!DOCTYPE html>
@@ -224,7 +237,7 @@ def create_test_article():
     <head><title>Test Article Created</title></head>
     <body style="font-family: Georgia; text-align: center; padding: 50px;">
         <h1 style="color: #1a3d1a;">✅ Test Article Created!</h1>
-        <p>A test article has been created. Visit <a href="/latest">/latest</a> to see it.</p>
+        <p>Visit <a href="/latest">/latest</a> to view it.</p>
         <a href="/latest">View Latest Dispatch →</a>
     </body>
     </html>
@@ -234,17 +247,14 @@ def create_test_article():
 def health():
     return jsonify({"status": "healthy"})
 
-@app.route('/debug-files')
-def debug_files():
-    import glob
+@app.route('/debug')
+def debug():
+    article = load_article()
     return jsonify({
-        "files": glob.glob('*'),
-        "current_directory": os.getcwd()
+        "article_exists": article is not None,
+        "article_title": article['title'] if article else None,
+        "file_exists": os.path.exists(ARTICLE_FILE)
     })
-
-@app.route('/sw.js')
-def sw():
-    return 'self.addEventListener("fetch", () => {});', 200, {'Content-Type': 'application/javascript'}
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 10000))
