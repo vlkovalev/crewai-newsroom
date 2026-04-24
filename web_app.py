@@ -217,7 +217,7 @@ news_articles = [
 ]
 
 # ============================================
-# HOME PAGE WITH CLASSIFIEDS CATEGORY FILTERS
+# HOME PAGE
 # ============================================
 
 @app.route('/')
@@ -528,14 +528,14 @@ def article_page(article_id):
     '''
 
 # ============================================
-# SUPPORTER PAGE WITH CUSTOM AMOUNT & PAYPAL
+# SUPPORTER PAGE WITH PAYPAL (Complete Version)
 # ============================================
 
 @app.route('/support')
 def support():
-    # Update these with your actual PayPal plan IDs after creating them
-    MONTHLY_PLAN_ID = "P-5XXXXXXXXXXXXXX"  # Replace with your monthly plan ID
-    YEARLY_PLAN_ID = "P-5XXXXXXXXXXXXXX"   # Replace with your yearly plan ID
+    # Your actual PayPal Plan IDs
+    MONTHLY_PLAN_ID = "P-0PA287541E8427458NHV7MEY"    # $5/month
+    YEARLY_PLAN_ID = "P-43731273WF611694DNHV7NUQ"     # $50/year
     
     return f'''
     <!DOCTYPE html>
@@ -546,7 +546,7 @@ def support():
         <title>Become a Supporter - Spruce Grove Gazette</title>
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
         <style>
-            :root {{ --primary: #1a3d1a; --primary-light: #2C5F2D; --accent: #D4A017; }}
+            :root {{ --primary: #1a3d1a; --primary-light: #2C5F2D; --accent: #D4A017; --donate: #e74c3c; }}
             body {{ font-family: 'Georgia', serif; background: #f9f9f5; margin: 0; }}
             .header {{ background: var(--primary); color: white; padding: 40px; text-align: center; }}
             .header h1 {{ margin: 0; font-size: 42px; }}
@@ -556,7 +556,9 @@ def support():
             .pricing-card {{ background: white; border-radius: 15px; padding: 35px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.1); transition: transform 0.3s; }}
             .pricing-card:hover {{ transform: translateY(-5px); }}
             .pricing-card.featured {{ border: 2px solid var(--accent); position: relative; }}
+            .pricing-card.donation-card {{ border: 2px solid var(--donate); background: linear-gradient(135deg, white, #fff5f5); }}
             .popular-badge {{ position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: var(--accent); color: var(--primary); padding: 5px 20px; border-radius: 20px; font-size: 12px; font-weight: bold; }}
+            .donation-badge {{ position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: var(--donate); color: white; padding: 5px 20px; border-radius: 20px; font-size: 12px; font-weight: bold; }}
             .price {{ font-size: 48px; font-weight: bold; color: var(--primary); margin: 20px 0; }}
             .price small {{ font-size: 16px; font-weight: normal; color: #666; }}
             .features {{ list-style: none; text-align: left; margin: 25px 0; }}
@@ -566,7 +568,7 @@ def support():
             .btn:hover {{ background: #0d260d; }}
             .paypal-container {{ margin-top: 20px; min-height: 120px; }}
             .custom-amount {{ margin-top: 20px; }}
-            .custom-amount input {{ padding: 12px; width: 150px; border: 1px solid #ddd; border-radius: 5px; text-align: center; font-size: 18px; margin: 10px; }}
+            .custom-amount input {{ padding: 12px; width: 150px; border: 2px solid var(--donate); border-radius: 5px; text-align: center; font-size: 18px; margin: 10px; }}
             .impact-section {{ background: white; border-radius: 15px; padding: 40px; text-align: center; margin-top: 50px; }}
             .impact-grid {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 30px; margin-top: 30px; }}
             .impact-card {{ text-align: center; padding: 20px; }}
@@ -574,7 +576,7 @@ def support():
             .footer {{ background: #0d260d; color: white; text-align: center; padding: 30px; margin-top: 40px; }}
             @media (max-width: 768px) {{ .pricing-grid {{ grid-template-columns: 1fr; }} .impact-grid {{ grid-template-columns: 1fr; }} }}
         </style>
-        <script src="https://www.paypal.com/sdk/js?client-id=AU6T1_qn4WZfpWJkCsMEgEUMrhfsA8oKffBsEaJDfPFNSy4FbW3LzWv3BmP8FhQkDjNq0hXKxYzAbCdE&currency=CAD"></script>
+        <script src="https://www.paypal.com/sdk/js?client-id=Aa9RxmM6ixcweCszja-0kFbxZmkaWGOCycDUYxDyJUFSNxEgPv91dHaIyAbGd-SSHm0PzU32em5Ugnev&currency=CAD&vault=true&intent=subscription"></script>
     </head>
     <body>
         <div class="header">
@@ -584,6 +586,7 @@ def support():
         
         <div class="container">
             <div class="pricing-grid">
+                <!-- Free Tier -->
                 <div class="pricing-card">
                     <h3>Free Reader</h3>
                     <div class="price">$0</div>
@@ -597,6 +600,7 @@ def support():
                     <a href="/subscribe" class="btn">Current Plan →</a>
                 </div>
                 
+                <!-- Monthly Supporter - $5/month -->
                 <div class="pricing-card">
                     <h3>Monthly Supporter</h3>
                     <div class="price">$5<span><small>/month</small></span></div>
@@ -609,30 +613,27 @@ def support():
                     <div class="paypal-container" id="paypal-monthly"></div>
                 </div>
                 
-                <div class="pricing-card featured">
-                    <div class="popular-badge">⭐ MOST FLEXIBLE</div>
-                    <h3>Custom Amount</h3>
+                <!-- DONATION CARD - Support Local Journalism -->
+                <div class="pricing-card donation-card">
+                    <div class="donation-badge">❤️ MAKE A DONATION</div>
+                    <h3>Support Local Journalism</h3>
                     <div class="price">$<span id="customAmountDisplay">10</span><span><small>/one-time</small></span></div>
                     <div class="custom-amount">
-                        <input type="number" id="customAmount" min="5" max="1000" step="5" value="10" style="padding: 12px; width: 150px; border: 1px solid #ddd; border-radius: 5px; text-align: center; font-size: 18px;">
-                        <div style="font-size: 12px; color: #666; margin-top: 5px;">CAD $5 - $1000</div>
+                        <input type="number" id="customAmount" min="5" max="1000" step="5" value="10">
+                        <div style="font-size: 12px; color: #666;">CAD $5 - $1000</div>
                     </div>
                     <ul class="features">
-                        <li><i class="fas fa-check"></i> All free features</li>
-                        <li><i class="fas fa-check"></i> Supporter badge</li>
-                        <li><i class="fas fa-check"></i> Weekly exclusive content</li>
-                        <li><i class="fas fa-check"></i> Name in supporter roll</li>
                         <li><i class="fas fa-check"></i> Choose your own amount</li>
-                        <li><i class="fas fa-check"></i> One-time or recurring</li>
+                        <li><i class="fas fa-check"></i> One-time donation</li>
+                        <li><i class="fas fa-check"></i> Supporter recognition</li>
+                        <li><i class="fas fa-check"></i> Tax receipt available for donations over $20</li>
                     </ul>
-                    <div style="margin-bottom: 15px;">
-                        <button id="oneTimeBtn" class="btn" style="background: var(--accent); color: var(--primary); margin-right: 10px;">💳 One-Time</button>
-                        <button id="monthlyCustomBtn" class="btn" style="background: var(--primary);">🔄 Monthly</button>
-                    </div>
                     <div id="customPaypalContainer"></div>
                 </div>
                 
-                <div class="pricing-card">
+                <!-- Yearly Supporter - $50/year -->
+                <div class="pricing-card featured">
+                    <div class="popular-badge">⭐ BEST VALUE</div>
                     <h3>Yearly Supporter</h3>
                     <div class="price">$50<span><small>/year</small></span></div>
                     <div style="font-size: 14px; color: #666; margin-top: -15px;">Save $10 compared to monthly</div>
@@ -648,29 +649,20 @@ def support():
             </div>
             
             <div class="impact-section">
-                <h2>Your Support Makes a Difference</h2>
+                <h2>Your Donation Makes a Difference</h2>
                 <div class="impact-grid">
-                    <div class="impact-card">
-                        <i class="fas fa-newspaper"></i>
-                        <h3>Local Coverage</h3>
-                        <p>Funds our coverage of council meetings, school boards, and community events</p>
-                    </div>
-                    <div class="impact-card">
-                        <i class="fas fa-camera"></i>
-                        <h3>Community Photos</h3>
-                        <p>Supports our photo gallery and community submission platform</p>
-                    </div>
-                    <div class="impact-card">
-                        <i class="fas fa-mobile-alt"></i>
-                        <h3>Free for All</h3>
-                        <p>Keeps the Gazette accessible to every resident</p>
-                    </div>
+                    <div class="impact-card"><i class="fas fa-newspaper"></i><h3>$10</h3><p>Funds one day of local news coverage</p></div>
+                    <div class="impact-card"><i class="fas fa-camera"></i><h3>$25</h3><p>Supports community photo submissions for a week</p></div>
+                    <div class="impact-card"><i class="fas fa-mobile-alt"></i><h3>$50</h3><p>Keeps the Gazette free for everyone for one month</p></div>
                 </div>
             </div>
             
             <div style="text-align: center; margin-top: 30px; padding: 20px; background: #e8f5e9; border-radius: 10px;">
                 <i class="fas fa-lock" style="margin-right: 10px;"></i>
                 <strong>Secure payments by PayPal</strong> — Your payment information is encrypted and never stored on our servers.
+                <br><small>You can cancel your subscription anytime from your PayPal account.</small>
+                <br><br>
+                <i class="fas fa-receipt"></i> <strong>Tax receipts available for donations over $20</strong>
             </div>
         </div>
         
@@ -680,105 +672,82 @@ def support():
         </div>
         
         <script>
-            paypal.Buttons({{
-                style: {{ shape: 'rect', color: 'gold', layout: 'vertical', label: 'subscribe', height: 40 }},
-                createSubscription: function(data, actions) {{
-                    return actions.subscription.create({{ 'plan_id': '{MONTHLY_PLAN_ID}', 'application_context': {{ 'shipping_preference': 'NO_SHIPPING' }} }});
-                }},
-                onApprove: function(data, actions) {{
+            // Monthly Subscription ($5/month)
+            paypal.Buttons({
+                style: { shape: 'rect', color: 'gold', layout: 'vertical', label: 'subscribe', height: 40 },
+                createSubscription: function(data, actions) {
+                    return actions.subscription.create({
+                        plan_id: '{MONTHLY_PLAN_ID}',
+                        application_context: { shipping_preference: 'NO_SHIPPING' }
+                    });
+                },
+                onApprove: function(data, actions) {
                     alert('Thank you for subscribing! You are now a Gazette Monthly Supporter.');
                     window.location.href = '/support-thank-you';
-                }},
-                onError: function(err) {{
+                },
+                onError: function(err) {
+                    console.error(err);
                     alert('Payment failed. Please try again.');
-                }}
-            }}).render('#paypal-monthly');
+                }
+            }).render('#paypal-monthly');
             
-            paypal.Buttons({{
-                style: {{ shape: 'rect', color: 'gold', layout: 'vertical', label: 'subscribe', height: 40 }},
-                createSubscription: function(data, actions) {{
-                    return actions.subscription.create({{ 'plan_id': '{YEARLY_PLAN_ID}', 'application_context': {{ 'shipping_preference': 'NO_SHIPPING' }} }});
-                }},
-                onApprove: function(data, actions) {{
+            // Yearly Subscription ($50/year)
+            paypal.Buttons({
+                style: { shape: 'rect', color: 'gold', layout: 'vertical', label: 'subscribe', height: 40 },
+                createSubscription: function(data, actions) {
+                    return actions.subscription.create({
+                        plan_id: '{YEARLY_PLAN_ID}',
+                        application_context: { shipping_preference: 'NO_SHIPPING' }
+                    });
+                },
+                onApprove: function(data, actions) {
                     alert('Thank you for subscribing! You are now a Gazette Yearly Supporter.');
                     window.location.href = '/support-thank-you';
-                }},
-                onError: function(err) {{
+                },
+                onError: function(err) {
+                    console.error(err);
                     alert('Payment failed. Please try again.');
-                }}
-            }}).render('#paypal-yearly');
+                }
+            }).render('#paypal-yearly');
             
+            // Custom Amount - One-Time Donation
             const customInput = document.getElementById('customAmount');
             const displaySpan = document.getElementById('customAmountDisplay');
-            let currentCustomMode = 'one-time';
-            let customPaypalRendered = false;
             
-            customInput.addEventListener('input', function() {{
+            customInput.addEventListener('input', function() {
                 displaySpan.innerText = customInput.value;
-                customPaypalRendered = false;
                 renderCustomPaypalButton();
-            }});
+            });
             
-            function renderCustomPaypalButton() {{
+            function renderCustomPaypalButton() {
                 const amount = parseFloat(customInput.value);
                 const container = document.getElementById('customPaypalContainer');
-                if (customPaypalRendered) container.innerHTML = '';
-                
-                if (currentCustomMode === 'one-time') {{
-                    paypal.Buttons({{
-                        style: {{ shape: 'rect', color: 'gold', layout: 'vertical', label: 'paypal', height: 40 }},
-                        createOrder: function(data, actions) {{
-                            return actions.order.create({{
-                                purchase_units: [{{
-                                    amount: {{ value: amount.toFixed(2), currency_code: 'CAD' }},
+                if (container) {
+                    container.innerHTML = '';
+                    
+                    paypal.Buttons({
+                        style: { shape: 'rect', color: 'gold', layout: 'vertical', label: 'paypal', height: 40 },
+                        createOrder: function(data, actions) {
+                            return actions.order.create({
+                                purchase_units: [{
+                                    amount: { value: amount.toFixed(2), currency_code: 'CAD' },
                                     description: 'Gazette Supporter Donation'
-                                }}]
-                            }});
-                        }},
-                        onApprove: function(data, actions) {{
-                            return actions.order.capture().then(function(details) {{
-                                alert('Thank you for your donation!');
+                                }]
+                            });
+                        },
+                        onApprove: function(data, actions) {
+                            return actions.order.capture().then(function(details) {
+                                alert('Thank you for your donation of $' + amount.toFixed(2) + '! Your support keeps local journalism alive.');
                                 window.location.href = '/support-thank-you';
-                            }});
-                        }},
-                        onError: function(err) {{ alert('Payment failed.'); }}
-                    }}).render('#customPaypalContainer');
-                }} else {{
-                    paypal.Buttons({{
-                        style: {{ shape: 'rect', color: 'gold', layout: 'vertical', label: 'subscribe', height: 40 }},
-                        createOrder: function(data, actions) {{
-                            return actions.order.create({{
-                                purchase_units: [{{
-                                    amount: {{ value: amount.toFixed(2), currency_code: 'CAD' }},
-                                    description: 'Monthly Gazette Supporter Donation'
-                                }}]
-                            }});
-                        }},
-                        onApprove: function(data, actions) {{
-                            return actions.order.capture().then(function(details) {{
-                                alert('Thank you for your monthly support!');
-                                window.location.href = '/support-thank-you';
-                            }});
-                        }},
-                        onError: function(err) {{ alert('Payment failed.'); }}
-                    }}).render('#customPaypalContainer');
-                }}
-                customPaypalRendered = true;
-            }}
-            
-            document.getElementById('oneTimeBtn').addEventListener('click', function() {{
-                currentCustomMode = 'one-time';
-                document.getElementById('oneTimeBtn').style.background = '#D4A017';
-                document.getElementById('monthlyCustomBtn').style.background = '#1a3d1a';
-                renderCustomPaypalButton();
-            }});
-            
-            document.getElementById('monthlyCustomBtn').addEventListener('click', function() {{
-                currentCustomMode = 'monthly';
-                document.getElementById('monthlyCustomBtn').style.background = '#D4A017';
-                document.getElementById('oneTimeBtn').style.background = '#1a3d1a';
-                renderCustomPaypalButton();
-            }});
+                            });
+                        },
+                        onError: function(err) {
+                            console.error(err);
+                            alert('Payment failed. Please try again.');
+                        }
+                    }).render('#customPaypalContainer');
+                }
+            }
             
             renderCustomPaypalButton();
         </script>
@@ -796,6 +765,7 @@ def support_thank_you():
         <h1 style="color: #1a3d1a;">🎉 Thank You for Your Support!</h1>
         <p>You are now an official Spruce Grove Gazette Supporter.</p>
         <p>Your contribution helps keep local journalism alive in Spruce Grove and Parkland County.</p>
+        <p>You'll receive a confirmation email shortly.</p>
         <a href="/" style="color: #1a3d1a;">← Back to Gazette</a>
     </body>
     </html>
