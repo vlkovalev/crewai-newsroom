@@ -226,6 +226,13 @@ def home():
     events = get_events(5)
     businesses = get_businesses('all', 6)
     
+    # Get classifieds from database
+    conn = sqlite3.connect('gazette.db')
+    cursor = conn.cursor()
+    cursor.execute("SELECT title, description, price, contact, date FROM classifieds WHERE active = 1 ORDER BY date DESC LIMIT 3")
+    classifieds_list = cursor.fetchall()
+    conn.close()
+    
     featured = news_articles[0]
     other_articles = news_articles[1:7]
     
@@ -234,6 +241,19 @@ def home():
     events_html = ''.join([f'<li><strong>{e["title"]}</strong><br>{e["date"]} at {e["time"]}<br>📍 {e["location"]}</li>' for e in events])
     
     businesses_html = ''.join([f'<div class="business-card"><h4>{b["name"]}</h4><div class="business-category">{b["category"]}</div><p>{b["description"][:100]}...</p><div class="business-contact"><i class="fas fa-phone"></i> {b["phone"]}</div></div>' for b in businesses])
+    
+    # Classifieds preview HTML
+    if classifieds_list:
+        classifieds_html = ''.join([f'''
+            <div style="border-bottom: 1px solid #eee; padding: 15px 0;">
+                <strong>{c[0]}</strong>
+                <p style="margin: 5px 0; color: #666;">{c[1][:100]}...</p>
+                <div style="color: var(--accent); font-weight: bold;">{c[2] if c[2] else "Price not specified"}</div>
+                <small>Contact: {c[3]} | Posted: {c[4]}</small>
+            </div>
+        ''' for c in classifieds_list])
+    else:
+        classifieds_html = '<p style="color: #666;">No classifieds yet. <a href="/post-ad">Post an ad →</a></p>'
     
     other_articles_html = ''
     for a in other_articles:
@@ -311,6 +331,7 @@ def home():
             .ad-spot h3 {{ color: var(--primary); margin-bottom: 10px; }}
             .ad-price {{ font-size: 28px; font-weight: bold; color: var(--accent); }}
             .btn-ad {{ background: var(--primary); color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin-top: 10px; }}
+            .classifieds-preview {{ margin-bottom: 15px; }}
             .newsletter {{ background: linear-gradient(135deg, var(--primary), #0d260d); color: white; padding: 35px; border-radius: 15px; text-align: center; margin: 40px 0; }}
             .newsletter input {{ padding: 10px; width: 250px; border: none; border-radius: 5px; margin: 8px; }}
             .newsletter select {{ padding: 10px; width: 200px; border: none; border-radius: 5px; margin: 8px; }}
@@ -378,18 +399,28 @@ def home():
             
             <div class="two-column">
                 <div>
+                    <h2 class="section-title">📋 Recent Classifieds</h2>
+                    <div class="feature-card" style="background:white;border-radius:10px;padding:25px;margin-bottom:30px">
+                        <div class="classifieds-preview">{classifieds_html}</div>
+                        <a href="/classifieds" class="btn">View All Classifieds →</a>
+                        <a href="/post-ad" class="btn" style="background: var(--accent); color: var(--primary); margin-left: 10px;">📝 Post an Ad →</a>
+                    </div>
+                    
                     <h2 class="section-title">📅 Upcoming Events</h2>
                     <div class="feature-card" style="background:white;border-radius:10px;padding:25px;margin-bottom:30px"><ul style="list-style: none;">{events_html}</ul><a href="/events" class="btn">View All Events →</a></div>
+                    
                     <h2 class="section-title">🏪 Local Businesses</h2>
                     <div class="business-grid">{businesses_html}</div>
                     <div style="text-align: center;"><a href="/business-directory" class="btn">View All →</a></div>
                 </div>
+                
                 <div>
                     <div class="weather-widget">
                         <div class="weather-main"><div class="weather-icon">{weather['current']['icon']}</div><div class="weather-temp">{weather['current']['temp']}<small>°C</small></div><div>{weather['current']['condition']}</div></div>
                         <div class="weather-details"><div><i class="fas fa-tint"></i><br>{weather['current']['humidity']}%</div><div><i class="fas fa-wind"></i><br>{weather['current']['wind']} km/h</div></div>
                         <div class="forecast">{forecast_html}</div>
                     </div>
+                    
                     <div class="ad-spot">
                         <i class="fas fa-bullhorn" style="font-size: 36px; color: var(--primary);"></i>
                         <h3>Advertise With Us</h3>
@@ -485,7 +516,7 @@ def article_page(article_id):
     '''
 
 # ============================================
-# SUPPORTER PAGE with PAYPAL
+# SUPPORTER PAGE with CUSTOM AMOUNT & PAYPAL
 # ============================================
 
 @app.route('/support')
@@ -509,7 +540,7 @@ def support():
             .header h1 {{ margin: 0; font-size: 42px; }}
             .header p {{ font-size: 18px; margin-top: 10px; opacity: 0.9; }}
             .container {{ max-width: 1200px; margin: 0 auto; padding: 50px 20px; }}
-            .pricing-grid {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 30px; margin: 50px 0; }}
+            .pricing-grid {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 30px; margin: 50px 0; }}
             .pricing-card {{ background: white; border-radius: 15px; padding: 35px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.1); transition: transform 0.3s; }}
             .pricing-card:hover {{ transform: translateY(-5px); }}
             .pricing-card.featured {{ border: 2px solid var(--accent); position: relative; }}
@@ -522,6 +553,8 @@ def support():
             .btn {{ display: inline-block; background: var(--primary); color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin-top: 20px; font-weight: bold; cursor: pointer; border: none; }}
             .btn:hover {{ background: #0d260d; }}
             .paypal-container {{ margin-top: 20px; min-height: 120px; }}
+            .custom-amount {{ margin-top: 20px; }}
+            .custom-amount input {{ padding: 12px; width: 150px; border: 1px solid #ddd; border-radius: 5px; text-align: center; font-size: 18px; margin: 10px; }}
             .impact-section {{ background: white; border-radius: 15px; padding: 40px; text-align: center; margin-top: 50px; }}
             .impact-grid {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 30px; margin-top: 30px; }}
             .impact-card {{ text-align: center; padding: 20px; }}
@@ -529,7 +562,7 @@ def support():
             .footer {{ background: #0d260d; color: white; text-align: center; padding: 30px; margin-top: 40px; }}
             @media (max-width: 768px) {{ .pricing-grid {{ grid-template-columns: 1fr; }} .impact-grid {{ grid-template-columns: 1fr; }} }}
         </style>
-        <script src="https://www.paypal.com/sdk/js?client-id=AU6T1_qn4WZfpWJkCsMEgEUMrhfsA8oKffBsEaJDfPFNSy4FbW3LzWv3BmP8FhQkDjNq0hXKxYzAbCdE&currency=CAD&vault=true&intent=subscription"></script>
+        <script src="https://www.paypal.com/sdk/js?client-id=AU6T1_qn4WZfpWJkCsMEgEUMrhfsA8oKffBsEaJDfPFNSy4FbW3LzWv3BmP8FhQkDjNq0hXKxYzAbCdE&currency=CAD"></script>
     </head>
     <body>
         <div class="header">
@@ -552,19 +585,39 @@ def support():
                     <a href="/subscribe" class="btn">Current Plan →</a>
                 </div>
                 
-                <div class="pricing-card featured">
-                    <div class="popular-badge">⭐ MOST POPULAR</div>
+                <div class="pricing-card">
                     <h3>Monthly Supporter</h3>
                     <div class="price">$5<span><small>/month</small></span></div>
                     <ul class="features">
                         <li><i class="fas fa-check"></i> All free features</li>
-                        <li><i class="fas fa-check"></i> Supporter badge on comments</li>
+                        <li><i class="fas fa-check"></i> Supporter badge</li>
                         <li><i class="fas fa-check"></i> Weekly exclusive content</li>
                         <li><i class="fas fa-check"></i> Behind-the-scenes updates</li>
-                        <li><i class="fas fa-check"></i> Early access to events</li>
-                        <li><i class="fas fa-check"></i> Reader appreciation shoutout</li>
                     </ul>
                     <div class="paypal-container" id="paypal-monthly"></div>
+                </div>
+                
+                <div class="pricing-card featured">
+                    <div class="popular-badge">⭐ MOST FLEXIBLE</div>
+                    <h3>Custom Amount</h3>
+                    <div class="price">$<span id="customAmountDisplay">10</span><span><small>/one-time</small></span></div>
+                    <div class="custom-amount">
+                        <input type="number" id="customAmount" min="5" max="1000" step="5" value="10" style="padding: 12px; width: 150px; border: 1px solid #ddd; border-radius: 5px; text-align: center; font-size: 18px;">
+                        <div style="font-size: 12px; color: #666; margin-top: 5px;">CAD $5 - $1000</div>
+                    </div>
+                    <ul class="features">
+                        <li><i class="fas fa-check"></i> All free features</li>
+                        <li><i class="fas fa-check"></i> Supporter badge</li>
+                        <li><i class="fas fa-check"></i> Weekly exclusive content</li>
+                        <li><i class="fas fa-check"></i> Name in supporter roll</li>
+                        <li><i class="fas fa-check"></i> Choose your own amount</li>
+                        <li><i class="fas fa-check"></i> One-time or recurring</li>
+                    </ul>
+                    <div style="margin-bottom: 15px;">
+                        <button id="oneTimeBtn" class="btn" style="background: var(--accent); color: var(--primary); margin-right: 10px;">💳 One-Time</button>
+                        <button id="monthlyCustomBtn" class="btn" style="background: var(--primary);">🔄 Monthly</button>
+                    </div>
+                    <div id="customPaypalContainer"></div>
                 </div>
                 
                 <div class="pricing-card">
@@ -572,7 +625,7 @@ def support():
                     <div class="price">$50<span><small>/year</small></span></div>
                     <div style="font-size: 14px; color: #666; margin-top: -15px;">Save $10 compared to monthly</div>
                     <ul class="features">
-                        <li><i class="fas fa-check"></i> All monthly supporter benefits</li>
+                        <li><i class="fas fa-check"></i> All monthly benefits</li>
                         <li><i class="fas fa-check"></i> Name in annual supporter roll</li>
                         <li><i class="fas fa-check"></i> Exclusive Gazette merch discount</li>
                         <li><i class="fas fa-check"></i> Invitation to annual supporter event</li>
@@ -606,7 +659,7 @@ def support():
             <div style="text-align: center; margin-top: 30px; padding: 20px; background: #e8f5e9; border-radius: 10px;">
                 <i class="fas fa-lock" style="margin-right: 10px;"></i>
                 <strong>Secure payments by PayPal</strong> — Your payment information is encrypted and never stored on our servers.
-                <br><small>You can cancel your subscription anytime from your PayPal account.</small>
+                <br><small>All contributions are greatly appreciated and help sustain local journalism.</small>
             </div>
         </div>
         
@@ -669,6 +722,89 @@ def support():
                     alert('Payment failed. Please try again or contact us at editor@sprucegrovegazette.com');
                 }}
             }}).render('#paypal-yearly');
+            
+            // Custom Amount
+            const customInput = document.getElementById('customAmount');
+            const displaySpan = document.getElementById('customAmountDisplay');
+            let currentCustomMode = 'one-time';
+            let customPaypalRendered = false;
+            
+            customInput.addEventListener('input', function() {{
+                displaySpan.innerText = customInput.value;
+                customPaypalRendered = false;
+                renderCustomPaypalButton();
+            }});
+            
+            function renderCustomPaypalButton() {{
+                const amount = parseFloat(customInput.value);
+                const container = document.getElementById('customPaypalContainer');
+                if (customPaypalRendered) container.innerHTML = '';
+                
+                if (currentCustomMode === 'one-time') {{
+                    paypal.Buttons({{
+                        style: {{ shape: 'rect', color: 'gold', layout: 'vertical', label: 'paypal', height: 40 }},
+                        createOrder: function(data, actions) {{
+                            return actions.order.create({{
+                                purchase_units: [{{
+                                    amount: {{ value: amount.toFixed(2), currency_code: 'CAD' }},
+                                    description: 'Gazette Supporter Donation'
+                                }}]
+                            }});
+                        }},
+                        onApprove: function(data, actions) {{
+                            return actions.order.capture().then(function(details) {{
+                                alert('Thank you ' + details.payer.name.given_name + '! Your donation of $' + amount.toFixed(2) + ' means the world to us.');
+                                window.location.href = '/support-thank-you';
+                            }});
+                        }},
+                        onError: function(err) {{
+                            alert('Payment failed. Please try again.');
+                        }}
+                    }}).render('#customPaypalContainer');
+                }} else {{
+                    paypal.Buttons({{
+                        style: {{ shape: 'rect', color: 'gold', layout: 'vertical', label: 'subscribe', height: 40 }},
+                        createOrder: function(data, actions) {{
+                            return actions.order.create({{
+                                purchase_units: [{{
+                                    amount: {{ value: amount.toFixed(2), currency_code: 'CAD' }},
+                                    description: 'Monthly Gazette Supporter Donation'
+                                }}]
+                            }});
+                        }},
+                        onApprove: function(data, actions) {{
+                            return actions.order.capture().then(function(details) {{
+                                alert('Thank you for your monthly support!');
+                                window.location.href = '/support-thank-you';
+                            }});
+                        }},
+                        onError: function(err) {{
+                            alert('Payment failed. Please try again.');
+                        }}
+                    }}).render('#customPaypalContainer');
+                }}
+                customPaypalRendered = true;
+            }}
+            
+            document.getElementById('oneTimeBtn').addEventListener('click', function() {{
+                currentCustomMode = 'one-time';
+                document.getElementById('oneTimeBtn').style.background = '#D4A017';
+                document.getElementById('oneTimeBtn').style.color = '#1a3d1a';
+                document.getElementById('monthlyCustomBtn').style.background = '#1a3d1a';
+                document.getElementById('monthlyCustomBtn').style.color = 'white';
+                renderCustomPaypalButton();
+            }});
+            
+            document.getElementById('monthlyCustomBtn').addEventListener('click', function() {{
+                currentCustomMode = 'monthly';
+                document.getElementById('monthlyCustomBtn').style.background = '#D4A017';
+                document.getElementById('monthlyCustomBtn').style.color = '#1a3d1a';
+                document.getElementById('oneTimeBtn').style.background = '#1a3d1a';
+                document.getElementById('oneTimeBtn').style.color = 'white';
+                renderCustomPaypalButton();
+            }});
+            
+            renderCustomPaypalButton();
         </script>
     </body>
     </html>
