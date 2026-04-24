@@ -28,12 +28,11 @@ TAGLINE = "Spruce Grove's Primary Resource for Trade & Employment"
 
 GA_MEASUREMENT_ID = os.environ.get('GA_MEASUREMENT_ID', 'G-XXXXXXXXXX')
 WEATHER_API_KEY = os.environ.get('WEATHER_API_KEY', '')
+DB_PATH = 'gazette_archive.db'
 
 # ============================================
 # Database Setup
 # ============================================
-
-DB_PATH = 'gazette_archive.db'
 
 def init_database():
     conn = sqlite3.connect(DB_PATH)
@@ -195,6 +194,43 @@ def offline():
 def serve_icon(filename):
     svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#1a3d1a"/><text x="50" y="50" text-anchor="middle" dy=".3em" fill="white" font-size="40">📰</text></svg>'
     return app.response_class(svg, mimetype='image/svg+xml')
+
+# ============================================
+# Debug Routes
+# ============================================
+
+@app.route('/debug-files')
+def debug_files():
+    """See what files exist in the web service"""
+    import glob
+    import os
+    
+    # Get all HTML files
+    html_files = glob.glob('*.html')
+    # Get all database files
+    db_files = glob.glob('*.db')
+    # Get current directory
+    current_dir = os.getcwd()
+    
+    # Check if the database has any articles
+    article_count = 0
+    if os.path.exists(DB_PATH):
+        try:
+            conn = sqlite3.connect(DB_PATH)
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM articles")
+            article_count = cursor.fetchone()[0]
+            conn.close()
+        except:
+            article_count = -1
+    
+    return jsonify({
+        "current_directory": current_dir,
+        "html_files": html_files,
+        "database_files": db_files,
+        "articles_in_db": article_count,
+        "all_files": os.listdir('.')
+    })
 
 # ============================================
 # Main Route - Homepage
@@ -380,7 +416,7 @@ def home():
 </html>'''
 
 # ============================================
-# Latest Dispatch Route - FROM DATABASE
+# Latest Dispatch Route
 # ============================================
 
 @app.route('/latest')
