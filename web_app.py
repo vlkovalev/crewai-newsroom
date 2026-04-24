@@ -4,7 +4,7 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime, date, timedelta
-from flask import Flask, request, jsonify, redirect, session
+from flask import Flask, request, jsonify, redirect
 from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
@@ -25,7 +25,6 @@ def init_database():
     conn = sqlite3.connect('gazette.db')
     cursor = conn.cursor()
     
-    # Subscribers table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS subscribers (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -37,7 +36,6 @@ def init_database():
         )
     ''')
     
-    # Supporters table (paid members)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS supporters (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -50,7 +48,6 @@ def init_database():
         )
     ''')
     
-    # News tips table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS news_tips (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -63,7 +60,6 @@ def init_database():
         )
     ''')
     
-    # Photo submissions table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS photo_submissions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -77,7 +73,6 @@ def init_database():
         )
     ''')
     
-    # Businesses table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS businesses (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -95,7 +90,6 @@ def init_database():
         )
     ''')
     
-    # Events table with ticketing
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS events (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -114,7 +108,6 @@ def init_database():
         )
     ''')
     
-    # Classifieds table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS classifieds (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -609,15 +602,15 @@ def create_event():
     '''
 
 # ============================================
-# SHOP / AFFILIATE MARKETING ROUTE
+# SHOP / AFFILIATE MARKETING ROUTE (Fixed)
 # ============================================
 
 affiliate_products = [
-    {"id": 1, "name": "Snow Joe 21" 2-Stage Snow Blower", "description": "Perfect for Spruce Grove winters", "price": "$499", "category": "Winter Gear", "merchant": "Amazon"},
+    {"id": 1, "name": "Snow Joe 21-Inch 2-Stage Snow Blower", "description": "Perfect for Spruce Grove winters", "price": "$499", "category": "Winter Gear", "merchant": "Amazon"},
     {"id": 2, "name": "Greenworks 40V Cordless Lawn Mower", "description": "Quiet, zero-emission mowing", "price": "$329", "category": "Lawn & Garden", "merchant": "Amazon"},
     {"id": 3, "name": "Ring Video Doorbell 4", "description": "Keep your home safe", "price": "$199", "category": "Home Security", "merchant": "Amazon"},
     {"id": 4, "name": "Yeti Rambler 14 oz Mug", "description": "Keep coffee hot during commutes", "price": "$35", "category": "Everyday Essentials", "merchant": "Amazon"},
-    {"id": 5, "name": "Canadian Tire $50 Gift Card", "description": "Shop local", "price": "$50", "category": "Gift Cards", "merchant": "Canadian Tire"},
+    {"id": 5, "name": "Canadian Tire 50 Dollar Gift Card", "description": "Shop local", "price": "$50", "category": "Gift Cards", "merchant": "Canadian Tire"},
 ]
 
 @app.route('/shop')
