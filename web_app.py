@@ -226,7 +226,6 @@ def home():
     events = get_events(5)
     businesses = get_businesses('all', 6)
     
-    # Get classifieds from database
     conn = sqlite3.connect('gazette.db')
     cursor = conn.cursor()
     cursor.execute("SELECT title, description, price, contact, date, category FROM classifieds WHERE active = 1 ORDER BY date DESC LIMIT 5")
@@ -242,7 +241,6 @@ def home():
     
     businesses_html = ''.join([f'<div class="business-card"><h4>{b["name"]}</h4><div class="business-category">{b["category"]}</div><p>{b["description"][:100]}...</p><div class="business-contact"><i class="fas fa-phone"></i> {b["phone"]}</div></div>' for b in businesses])
     
-    # Classifieds preview HTML with category badges
     if classifieds_list:
         classifieds_html = ''.join([f'''
             <div style="border-bottom: 1px solid #eee; padding: 12px 0;">
@@ -528,7 +526,7 @@ def article_page(article_id):
     '''
 
 # ============================================
-# SUPPORTER PAGE WITH PAYPAL (Complete Version)
+# SUPPORTER PAGE WITH PAYPAL (Fixed - No f-string issues)
 # ============================================
 
 @app.route('/support')
@@ -537,7 +535,7 @@ def support():
     MONTHLY_PLAN_ID = "P-0PA287541E8427458NHV7MEY"    # $5/month
     YEARLY_PLAN_ID = "P-43731273WF611694DNHV7NUQ"     # $50/year
     
-    return f'''
+    return '''
     <!DOCTYPE html>
     <html>
     <head>
@@ -546,35 +544,35 @@ def support():
         <title>Become a Supporter - Spruce Grove Gazette</title>
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
         <style>
-            :root {{ --primary: #1a3d1a; --primary-light: #2C5F2D; --accent: #D4A017; --donate: #e74c3c; }}
-            body {{ font-family: 'Georgia', serif; background: #f9f9f5; margin: 0; }}
-            .header {{ background: var(--primary); color: white; padding: 40px; text-align: center; }}
-            .header h1 {{ margin: 0; font-size: 42px; }}
-            .header p {{ font-size: 18px; margin-top: 10px; opacity: 0.9; }}
-            .container {{ max-width: 1200px; margin: 0 auto; padding: 50px 20px; }}
-            .pricing-grid {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 30px; margin: 50px 0; }}
-            .pricing-card {{ background: white; border-radius: 15px; padding: 35px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.1); transition: transform 0.3s; }}
-            .pricing-card:hover {{ transform: translateY(-5px); }}
-            .pricing-card.featured {{ border: 2px solid var(--accent); position: relative; }}
-            .pricing-card.donation-card {{ border: 2px solid var(--donate); background: linear-gradient(135deg, white, #fff5f5); }}
-            .popular-badge {{ position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: var(--accent); color: var(--primary); padding: 5px 20px; border-radius: 20px; font-size: 12px; font-weight: bold; }}
-            .donation-badge {{ position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: var(--donate); color: white; padding: 5px 20px; border-radius: 20px; font-size: 12px; font-weight: bold; }}
-            .price {{ font-size: 48px; font-weight: bold; color: var(--primary); margin: 20px 0; }}
-            .price small {{ font-size: 16px; font-weight: normal; color: #666; }}
-            .features {{ list-style: none; text-align: left; margin: 25px 0; }}
-            .features li {{ padding: 8px 0; border-bottom: 1px solid #eee; }}
-            .features i {{ color: #27ae60; margin-right: 10px; width: 20px; }}
-            .btn {{ display: inline-block; background: var(--primary); color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin-top: 20px; font-weight: bold; cursor: pointer; border: none; }}
-            .btn:hover {{ background: #0d260d; }}
-            .paypal-container {{ margin-top: 20px; min-height: 120px; }}
-            .custom-amount {{ margin-top: 20px; }}
-            .custom-amount input {{ padding: 12px; width: 150px; border: 2px solid var(--donate); border-radius: 5px; text-align: center; font-size: 18px; margin: 10px; }}
-            .impact-section {{ background: white; border-radius: 15px; padding: 40px; text-align: center; margin-top: 50px; }}
-            .impact-grid {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 30px; margin-top: 30px; }}
-            .impact-card {{ text-align: center; padding: 20px; }}
-            .impact-card i {{ font-size: 48px; color: var(--accent); margin-bottom: 15px; }}
-            .footer {{ background: #0d260d; color: white; text-align: center; padding: 30px; margin-top: 40px; }}
-            @media (max-width: 768px) {{ .pricing-grid {{ grid-template-columns: 1fr; }} .impact-grid {{ grid-template-columns: 1fr; }} }}
+            :root { --primary: #1a3d1a; --primary-light: #2C5F2D; --accent: #D4A017; --donate: #e74c3c; }
+            body { font-family: 'Georgia', serif; background: #f9f9f5; margin: 0; }
+            .header { background: var(--primary); color: white; padding: 40px; text-align: center; }
+            .header h1 { margin: 0; font-size: 42px; }
+            .header p { font-size: 18px; margin-top: 10px; opacity: 0.9; }
+            .container { max-width: 1200px; margin: 0 auto; padding: 50px 20px; }
+            .pricing-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 30px; margin: 50px 0; }
+            .pricing-card { background: white; border-radius: 15px; padding: 35px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.1); transition: transform 0.3s; }
+            .pricing-card:hover { transform: translateY(-5px); }
+            .pricing-card.featured { border: 2px solid var(--accent); position: relative; }
+            .pricing-card.donation-card { border: 2px solid var(--donate); background: linear-gradient(135deg, white, #fff5f5); }
+            .popular-badge { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: var(--accent); color: var(--primary); padding: 5px 20px; border-radius: 20px; font-size: 12px; font-weight: bold; }
+            .donation-badge { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: var(--donate); color: white; padding: 5px 20px; border-radius: 20px; font-size: 12px; font-weight: bold; }
+            .price { font-size: 48px; font-weight: bold; color: var(--primary); margin: 20px 0; }
+            .price small { font-size: 16px; font-weight: normal; color: #666; }
+            .features { list-style: none; text-align: left; margin: 25px 0; }
+            .features li { padding: 8px 0; border-bottom: 1px solid #eee; }
+            .features i { color: #27ae60; margin-right: 10px; width: 20px; }
+            .btn { display: inline-block; background: var(--primary); color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin-top: 20px; font-weight: bold; cursor: pointer; border: none; }
+            .btn:hover { background: #0d260d; }
+            .paypal-container { margin-top: 20px; min-height: 120px; }
+            .custom-amount { margin-top: 20px; }
+            .custom-amount input { padding: 12px; width: 150px; border: 2px solid var(--donate); border-radius: 5px; text-align: center; font-size: 18px; margin: 10px; }
+            .impact-section { background: white; border-radius: 15px; padding: 40px; text-align: center; margin-top: 50px; }
+            .impact-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 30px; margin-top: 30px; }
+            .impact-card { text-align: center; padding: 20px; }
+            .impact-card i { font-size: 48px; color: var(--accent); margin-bottom: 15px; }
+            .footer { background: #0d260d; color: white; text-align: center; padding: 30px; margin-top: 40px; }
+            @media (max-width: 768px) { .pricing-grid { grid-template-columns: 1fr; } .impact-grid { grid-template-columns: 1fr; } }
         </style>
         <script src="https://www.paypal.com/sdk/js?client-id=Aa9RxmM6ixcweCszja-0kFbxZmkaWGOCycDUYxDyJUFSNxEgPv91dHaIyAbGd-SSHm0PzU32em5Ugnev&currency=CAD&vault=true&intent=subscription"></script>
     </head>
@@ -586,7 +584,6 @@ def support():
         
         <div class="container">
             <div class="pricing-grid">
-                <!-- Free Tier -->
                 <div class="pricing-card">
                     <h3>Free Reader</h3>
                     <div class="price">$0</div>
@@ -600,7 +597,6 @@ def support():
                     <a href="/subscribe" class="btn">Current Plan →</a>
                 </div>
                 
-                <!-- Monthly Supporter - $5/month -->
                 <div class="pricing-card">
                     <h3>Monthly Supporter</h3>
                     <div class="price">$5<span><small>/month</small></span></div>
@@ -613,7 +609,6 @@ def support():
                     <div class="paypal-container" id="paypal-monthly"></div>
                 </div>
                 
-                <!-- DONATION CARD - Support Local Journalism -->
                 <div class="pricing-card donation-card">
                     <div class="donation-badge">❤️ MAKE A DONATION</div>
                     <h3>Support Local Journalism</h3>
@@ -631,7 +626,6 @@ def support():
                     <div id="customPaypalContainer"></div>
                 </div>
                 
-                <!-- Yearly Supporter - $50/year -->
                 <div class="pricing-card featured">
                     <div class="popular-badge">⭐ BEST VALUE</div>
                     <h3>Yearly Supporter</h3>
@@ -677,7 +671,7 @@ def support():
                 style: { shape: 'rect', color: 'gold', layout: 'vertical', label: 'subscribe', height: 40 },
                 createSubscription: function(data, actions) {
                     return actions.subscription.create({
-                        plan_id: '{MONTHLY_PLAN_ID}',
+                        plan_id: 'P-0PA287541E8427458NHV7MEY',
                         application_context: { shipping_preference: 'NO_SHIPPING' }
                     });
                 },
@@ -696,7 +690,7 @@ def support():
                 style: { shape: 'rect', color: 'gold', layout: 'vertical', label: 'subscribe', height: 40 },
                 createSubscription: function(data, actions) {
                     return actions.subscription.create({
-                        plan_id: '{YEARLY_PLAN_ID}',
+                        plan_id: 'P-43731273WF611694DNHV7NUQ',
                         application_context: { shipping_preference: 'NO_SHIPPING' }
                     });
                 },
