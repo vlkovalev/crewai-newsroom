@@ -8,6 +8,8 @@ import sqlite3
 import glob
 import json
 import requests
+import subprocess
+import threading
 from datetime import datetime, date, timedelta
 from flask import Flask, jsonify, request, send_file
 
@@ -88,6 +90,52 @@ init_database()
 # ============================================
 # Helper Functions
 # ============================================
+
+def render_article(title, content, date_published):
+    """Render an article as HTML"""
+    return f'''
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>{title} - {NEWSPAPER_NAME}</title>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+            body {{ font-family: Georgia, 'Times New Roman', serif; max-width: 800px; margin: 0 auto; padding: 20px; line-height: 1.6; background: #f9f9f5; }}
+            h1 {{ color: #1a3d1a; border-bottom: 3px solid #D4A017; padding-bottom: 10px; }}
+            h2 {{ color: #2C5F2D; margin-top: 30px; }}
+            h3 {{ color: #4A7C4B; margin-top: 20px; }}
+            .meta {{ color: #666; border-bottom: 1px solid #ddd; padding-bottom: 10px; margin-bottom: 20px; }}
+            .footer {{ margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; text-align: center; font-size: 12px; color: #999; }}
+            .btn {{ display: inline-block; background: #1a3d1a; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 20px; }}
+            blockquote {{ border-left: 4px solid #D4A017; margin: 20px 0; padding-left: 20px; font-style: italic; }}
+        </style>
+    </head>
+    <body>
+        <h1>📰 {NEWSPAPER_NAME}</h1>
+        <div class="meta">📍 Spruce Grove, AB | 📅 {date_published}</div>
+        {content}
+        <div class="footer">
+            <p>— The Spruce Grove Gazette</p>
+            <p>Your Hometown, Online | Established {LAUNCH_DATE}</p>
+            <a href="/" class="btn">← Back to Home</a>
+        </div>
+    </body>
+    </html>
+    '''
+
+def generate_article_in_background():
+    """Run the news generation in the background"""
+    try:
+        result = subprocess.run(['python', 'news_crew_enhanced.py'], 
+                               capture_output=True, 
+                               text=True, 
+                               timeout=300)
+        print(f"Article generation completed: {result.stdout[:500]}")
+        return True
+    except Exception as e:
+        print(f"Article generation failed: {e}")
+        return False
 
 def get_latest_article_from_db():
     """Get the latest article from database"""
@@ -202,17 +250,10 @@ def serve_icon(filename):
 @app.route('/debug-files')
 def debug_files():
     """See what files exist in the web service"""
-    import glob
-    import os
-    
-    # Get all HTML files
     html_files = glob.glob('*.html')
-    # Get all database files
     db_files = glob.glob('*.db')
-    # Get current directory
     current_dir = os.getcwd()
     
-    # Check if the database has any articles
     article_count = 0
     if os.path.exists(DB_PATH):
         try:
@@ -231,6 +272,12 @@ def debug_files():
         "articles_in_db": article_count,
         "all_files": os.listdir('.')
     })
+
+@app.route('/force-generate')
+def force_generate():
+    """Force generate an article immediately"""
+    generate_article_in_background()
+    return jsonify({"status": "started", "message": "Article generation started. Check back at /latest in 60 seconds."})
 
 # ============================================
 # Main Route - Homepage
@@ -416,12 +463,12 @@ def home():
 </html>'''
 
 # ============================================
-# Latest Dispatch Route
+# Latest Dispatch Route - With Auto-Generation
 # ============================================
 
 @app.route('/latest')
 def latest_article():
-    """Serve the latest generated article from database"""
+    """Serve the latest generated article or trigger generation"""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("SELECT title, content, published_date FROM articles ORDER BY published_date DESC LIMIT 1")
@@ -430,45 +477,29 @@ def latest_article():
     
     if result:
         title, content, date_published = result
-        return f'''
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>{title} - {NEWSPAPER_NAME}</title>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1">
-            <style>
-                body {{ font-family: Georgia, 'Times New Roman', serif; max-width: 800px; margin: 0 auto; padding: 20px; line-height: 1.6; background: #f9f9f5; }}
-                h1 {{ color: #1a3d1a; border-bottom: 3px solid #D4A017; padding-bottom: 10px; }}
-                h2 {{ color: #2C5F2D; margin-top: 30px; }}
-                h3 {{ color: #4A7C4B; margin-top: 20px; }}
-                .meta {{ color: #666; border-bottom: 1px solid #ddd; padding-bottom: 10px; margin-bottom: 20px; }}
-                .footer {{ margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; text-align: center; font-size: 12px; color: #999; }}
-                .btn {{ display: inline-block; background: #1a3d1a; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 20px; }}
-                blockquote {{ border-left: 4px solid #D4A017; margin: 20px 0; padding-left: 20px; font-style: italic; }}
-            </style>
-        </head>
-        <body>
-            <h1>📰 {NEWSPAPER_NAME}</h1>
-            <div class="meta">📍 Spruce Grove, AB | 📅 {date_published}</div>
-            {content}
-            <div class="footer">
-                <p>— The Spruce Grove Gazette</p>
-                <p>Your Hometown, Online | Established {LAUNCH_DATE}</p>
-                <a href="/" class="btn">← Back to Home</a>
-            </div>
-        </body>
-        </html>
-        '''
+        return render_article(title, content, date_published)
     
+    # No article exists - show generation status
     return '''
     <!DOCTYPE html>
     <html>
-    <head><title>First Dispatch Coming Soon</title></head>
-    <body style="font-family: Georgia, serif; text-align: center; padding: 50px; background: #f9f9f5;">
-        <h1 style="color: #1a3d1a;">📰 First Dispatch Coming Soon</h1>
-        <p>The AI newsroom is preparing the first edition. The bot runs daily at 5:00 AM MT.</p>
-        <p>Check back after 5:00 AM tomorrow!</p>
+    <head>
+        <title>First Dispatch Coming Soon</title>
+        <meta http-equiv="refresh" content="35; url=/latest">
+        <style>
+            body { font-family: Georgia, serif; text-align: center; padding: 50px; background: #f9f9f5; }
+            .loader { border: 4px solid #f3f3f3; border-top: 4px solid #1a3d1a; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 20px auto; }
+            @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+            .btn { display: inline-block; background: #1a3d1a; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 20px; }
+        </style>
+    </head>
+    <body>
+        <h1 style="color: #1a3d1a;">📰 First Dispatch Being Generated</h1>
+        <p>The AI newsroom is creating the first edition. This may take up to 60 seconds.</p>
+        <div class="loader"></div>
+        <p>Page will auto-refresh in 35 seconds...</p>
+        <a href="/force-generate" class="btn">⏳ Force Generate Now</a>
+        <br><br>
         <a href="/" style="color: #1a3d1a;">← Back to Home</a>
     </body>
     </html>
@@ -562,7 +593,7 @@ def api_status():
 
 @app.route('/sitemap.xml')
 def sitemap():
-    sitemap = f'<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://sprucegrovegazette.com/</loc><lastmod>{datetime.now().strftime("%Y-%m-%d")}</lastmod><priority>1.0</priority></url><url><loc>https://sprucegrovegazette.com/latest</loc><priority>0.9</priority></url><url><loc>https://sprucegrovegazette.com/classifieds</loc><priority>0.8</priority></url><url><loc>https://sprucegrovegazette.com/search</loc><priority>0.8</priority></url></urlset>'
+    sitemap = f'<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://sprucegrovegazette.com/</loc><lastmod>{datetime.now().strftime("%Y-%m-%d")}</lastmod><priority>1.0</priority></url><url><loc>https://sprucegrovegazette.com/latest</loc><priority>0.9</priority></url><url><loc>https://sprucegrovegazette.com/classifieds</loc><priority>0.8</priority></url><url><loc>https://sprucegazette.com/search</loc><priority>0.8</priority></url></urlset>'
     return app.response_class(sitemap, mimetype='application/xml')
 
 if __name__ == '__main__':
