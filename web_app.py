@@ -9,35 +9,150 @@ NEWSPAPER_NAME = "The Spruce Grove Gazette"
 LAUNCH_DATE = "April 2026"
 
 # ============================================
-# The Actual Article (Shown on Front Page)
+# REAL Parkland County News Articles
 # ============================================
 
-ARTICLE_TITLE = "Spruce Grove Rallies for Earth Day with Monumental Tree Planting Effort"
-ARTICLE_DATE = "April 24, 2026"
+# FEATURED: Major Infrastructure Announcement
+FEATURED_ARTICLE = {
+    "title": "Province Pledges $136 Million for Parkland County Highway Upgrades",
+    "date": "March 4, 2026",
+    "source": "Parkland County Official News",
+    "content": """
+    <p>Parkland County, AB — The Government of Alberta's 2026 Budget confirms continued investment in two major transportation projects in Parkland County: improvements to Highway 60 and Highway 16, both essential to regional safety and economic growth.</p>
+    
+    <h3>Highway 60 Twinning and Overpass - $116 Million Investment</h3>
+    <p>The Highway 60 project includes twinning the section between Highways 16 and 16A and constructing a rail overpass to reduce delays and improve safety along this key trade corridor. These upgrades will better support the heavy and highload traffic serving the Acheson Industrial Area — one of Alberta's most important economic engines.</p>
+    
+    <h3>Highway 16 Improvements - $20 Million Investment</h3>
+    <p>The Province has reaffirmed its commitment to advancing Highway 16 improvements, with detailed design scheduled to begin in 2026 on a new interchange at Range Road 20. Planned upgrades will enhance safety and improve traffic flow along this high-speed corridor.</p>
+    
+    <p>"These investments are crucial for ensuring safer travel and supporting the people and industries that rely on our highways every day," said Mayor Rod Shaigec. "On behalf of the County, I express our sincere appreciation and look forward to continued collaboration as these projects move ahead."</p>
+    """
+}
 
-ARTICLE_CONTENT = """
-<h2>Spruce Grove Rallies for Earth Day with Monumental Tree Planting Effort</h2>
-<p>Spruce Grove, AB — In a remarkable display of environmental stewardship, the City of Spruce Grove launched its most ambitious Earth Day initiative to date, with over 5,000 trees planted across the community in a single weekend.</p>
+# Article 2: Education
+ARTICLE_2 = {
+    "title": "Parkland School Division Receives $354,000 Annual Mental Health Grant",
+    "date": "December 18, 2025",
+    "source": "Parkland School Division",
+    "content": """
+    <p>Parkland County, AB — Parkland School Division's regular board meeting revealed major updates on mental health funding and student transportation services.</p>
+    
+    <h3>Mental Health Funding Secured</h3>
+    <p>The division received approximately $834,000 through the Mental Health in School Pilot project over two years. Alberta Education has now added a wellbeing and mental health grant to the funding manual, with PSD receiving approximately $354,000 annually.</p>
+    
+    <p>"PSD will receive approximately $354,000 in the mental health grant for this school year, so the funding remains at the same level as was provided during the Mental Health in Schools Pilot," said Board Chair Lorraine Stewart.</p>
+    
+    <h3>Transportation Updates</h3>
+    <p>PSD is now transporting over 8,000 students, a 1.4% increase from the previous year. Gail Lewis, Director of Transportation Services, noted increasing requests tied to family circumstances such as alternate addresses, child care, and joint custody.</p>
+    
+    <p>The division is also seeing more students requiring mobility supports and specialized equipment, as well as more complex emotional behavioral needs.</p>
+    """
+}
 
-<p>Residents from all corners of the city came together to transform public spaces, parks, and school grounds, setting a new standard for community-led environmental action. The "Green Spruce Grove" initiative, organized by the city's Environmental Advisory Committee, saw participation from over 800 volunteers of all ages.</p>
+# Article 3: Environment
+ARTICLE_3 = {
+    "title": "Parkland County Secures $200,000 Grant for Sturgeon River Watershed Protection",
+    "date": "May 27, 2025",
+    "source": "Parkland County Council",
+    "content": """
+    <p>Parkland County, AB — Parkland County was recently successful in receiving $200,000 in grant funding through the Alberta Community Partnership Program, on behalf of the Sturgeon River Watershed Alliance.</p>
+    
+    <p>This opportunity supports regional collaboration and capacity building for implementation of the Sturgeon River Watershed Management Plan initiatives.</p>
+    
+    <h3>Grant Components</h3>
+    <ul>
+        <li><strong>$80,000</strong> - Watershed scale water quality evaluation</li>
+        <li><strong>$120,000</strong> - Infrastructure Management Framework for Watershed Health</li>
+    </ul>
+    
+    <p>The Sturgeon River Watershed Alliance brings together municipalities to protect water quality and watershed health across the region.</p>
+    """
+}
 
-<h3>Community Effort</h3>
-<p>"This is what Spruce Grove is all about," said Mayor Jeff Acker. "Our residents showed incredible dedication to making our city greener and more sustainable for generations to come."</p>
+# Article 4: Recreation Infrastructure
+ARTICLE_4 = {
+    "title": "Tri Leisure Centre Receives $235,313 Grant for Boiler Replacement",
+    "date": "December 9, 2025",
+    "source": "Parkland County Council",
+    "content": """
+    <p>Parkland County, AB — Council has approved grant funds for energy reduction projects at the Tri Leisure Centre, including a boiler replacement project partially funded by a $235,313 grant.</p>
+    
+    <p>Council also approved the use of the Tri Leisure Centre Restricted Reserve up to $250,000 to fund the portion of the project not covered by the grant.</p>
+    
+    <p>The project represents a significant step in reducing energy consumption at the regional recreation facility, which serves residents across Parkland County and surrounding communities.</p>
+    """
+}
 
-<p>The event targeted areas that have seen significant development in recent years, ensuring new growth complements the city's expanding neighborhoods. Local schools participated in educational components, teaching students about native species and ecosystem preservation.</p>
+# Article 5: Emergency Services
+ARTICLE_5 = {
+    "title": "Council Approves $250,000 for Fire Tanker Replacement",
+    "date": "December 9, 2025",
+    "source": "Parkland County Council",
+    "content": """
+    <p>Parkland County, AB — Parkland County Council has approved $250,000 in additional funding from the Lifecycle Restricted Surplus Account for the replacement of a fire water tanker truck for Fire District 1.</p>
+    
+    <p>The new tanker will enhance the fire department's capacity to respond to emergencies throughout the county. Fire District 1 serves a significant portion of Parkland County's population and industrial areas.</p>
+    
+    <p>This investment is part of ongoing efforts to ensure emergency services have modern, reliable equipment to protect residents and property.</p>
+    """
+}
 
-<h3>Looking Forward</h3>
-<p>The success of this Earth Day event has sparked conversations about making the tree planting initiative an annual tradition, with plans already in motion for an expanded program next spring.</p>
+# Article 6: Upcoming Public Hearing
+ARTICLE_6 = {
+    "title": "Public Hearing Set for March 24 on Proposed Road Closure",
+    "date": "March 10, 2026",
+    "source": "Parkland County",
+    "content": """
+    <p>Parkland County, AB — A public hearing has been scheduled for March 24, 2026, regarding Bylaw 2026-13, which proposes to close a portion of road for sale in Parkland County.</p>
+    
+    <p><strong>Hearing Details:</strong><br>
+    Date: March 24, 2026<br>
+    Time: 10:30 a.m.<br>
+    Location: Parkland County Council Chambers, 53109A Hwy 779</p>
+    
+    <p>The affected road portion is located within NW 28-53-4-W5, as shown on Plan 1620765. Written submissions must be received by 4:00 p.m. on March 20, 2026.</p>
+    
+    <p>This is a formal Public Hearing, and Council is prepared to hear submissions from those who wish to speak to the proposed Bylaw. Verbal presentations will be limited to 10 minutes.</p>
+    """
+}
 
-<p>— The Spruce Grove Gazette</p>
-"""
+# Article 7: Council Proclamations
+ARTICLE_7 = {
+    "title": "Parkland County Recognizes November as Family Violence Prevention Month",
+    "date": "September 9, 2025",
+    "source": "Parkland County Council",
+    "content": """
+    <p>Parkland County, AB — Parkland County Council has officially proclaimed several awareness campaigns for November 2025, recognizing the importance of community health and safety.</p>
+    
+    <h3>November 2025 Proclamations:</h3>
+    <ul>
+        <li>Family Violence Prevention Month</li>
+        <li>Seniors' Fall Prevention Month</li>
+        <li>Restorative Justice Week</li>
+        <li>GIS Day</li>
+        <li>World Pancreatic Cancer Day</li>
+    </ul>
+    
+    <p>"Parkland County supports recognized public campaigns for its community by proclamation," according to council documents. The proclamations acknowledge the work of non-profit organizations and community groups raising awareness on these important issues.</p>
+    """
+}
 
-# ============================================
-# Weather Data - Enhanced Version
-# ============================================
+# Article 8: Senior's Tax Assistance
+ARTICLE_8 = {
+    "title": "County to Promote Seniors Property Tax Deferral Program",
+    "date": "December 9, 2025",
+    "source": "Parkland County Council",
+    "content": """
+    <p>Parkland County, AB — Council has directed administration to proceed with promoting the Seniors Property Tax Deferral Program available through the province.</p>
+    
+    <p>The program allows eligible senior homeowners to defer all or part of their annual property taxes. The deferred amount becomes a debt on the property that is repaid when the home is sold or transferred.</p>
+    
+    <p>Administration will work to raise awareness of this option among Parkland County seniors who may benefit from the program.</p>
+    """
+}
 
 def get_weather():
-    """Get weather data - enhanced version"""
     return {
         "current": {
             "temp": 18,
@@ -59,28 +174,21 @@ def get_weather():
     }
 
 def get_events():
-    """Real upcoming events - no fake data"""
     return [
-        {"name": "Spruce Grove Farmers Market", "date": "Every Saturday", "location": "Downtown", "time": "10 AM - 3 PM"},
-        {"name": "City Council Meeting", "date": "Monday, April 28", "location": "City Hall", "time": "7 PM"},
-        {"name": "Library Story Time", "date": "Wednesday, April 30", "location": "Public Library", "time": "10:30 AM"},
-        {"name": "Community Clean-Up", "date": "Saturday, May 10", "location": "Various Locations", "time": "9 AM - 2 PM"},
-        {"name": "Spring Festival", "date": "May 15-17", "location": "Heritage Park", "time": "All Day"}
+        {"name": "Public Hearing - Bylaw 2026-13", "date": "March 24, 2026", "location": "Council Chambers", "time": "10:30 AM"},
+        {"name": "Parkland County Council Meeting", "date": "Regular Schedule", "location": "County Centre", "time": "9:00 AM"},
+        {"name": "Toddler Storytime", "date": "Weekly", "location": "Parkland Community Library", "time": "10:00 AM"}
     ]
 
 def get_gallery():
-    """Real community photos placeholder"""
     return [
-        {"title": "Earth Day Tree Planting", "caption": "Volunteers planting trees across Spruce Grove"},
-        {"title": "New Business Opening", "caption": "Main Street's newest local shop celebrates grand opening"},
-        {"title": "Youth Soccer", "caption": "Local youth soccer team in action"},
-        {"title": "Community Volunteers", "caption": "Volunteers beautifying the park"}
+        {"title": "Highway 60 Twinning Project", "caption": "$116 million investment for safer travel"},
+        {"title": "PSD Mental Health Program", "caption": "$354,000 annual grant for student wellbeing"},
+        {"title": "Sturgeon River Watershed", "caption": "$200,000 for water quality protection"},
+        {"title": "Tri Leisure Centre", "caption": "$235,313 grant for boiler replacement"}
     ]
 
-# Empty classifieds - users can post their own
 classifieds = []
-
-# Subscribers storage
 subscribers = []
 
 @app.route('/')
@@ -92,7 +200,6 @@ def home():
     gallery_html = ''.join([f'<div class="gallery-item"><div class="gallery-placeholder">{p["title"]}</div><p><strong>{p["title"]}</strong><br>{p["caption"]}</p></div>' for p in gallery])
     events_html = ''.join([f'<li><strong>{e["name"]}</strong><br>{e["date"]} at {e["time"]}<br>📍 {e["location"]}</li>' for e in events])
     
-    # Build forecast HTML
     forecast_html = ''.join([f'''
         <div class="forecast-day">
             <div class="forecast-day-name">{f["day"]}</div>
@@ -101,32 +208,63 @@ def home():
         </div>
     ''' for f in weather['forecast']])
     
+    # Build the "More News" grid with real articles
+    more_news_grid = f'''
+        <div class="news-card">
+            <h3>{ARTICLE_2['title']}</h3>
+            <div class="news-card-date">📍 Parkland County | 📅 {ARTICLE_2['date']}</div>
+            <p>{ARTICLE_2['content'][:200]}...</p>
+        </div>
+        <div class="news-card">
+            <h3>{ARTICLE_3['title']}</h3>
+            <div class="news-card-date">📍 Parkland County | 📅 {ARTICLE_3['date']}</div>
+            <p>{ARTICLE_3['content'][:200]}...</p>
+        </div>
+        <div class="news-card">
+            <h3>{ARTICLE_4['title']}</h3>
+            <div class="news-card-date">📍 Parkland County | 📅 {ARTICLE_4['date']}</div>
+            <p>{ARTICLE_4['content'][:200]}...</p>
+        </div>
+        <div class="news-card">
+            <h3>{ARTICLE_5['title']}</h3>
+            <div class="news-card-date">📍 Parkland County | 📅 {ARTICLE_5['date']}</div>
+            <p>{ARTICLE_5['content'][:200]}...</p>
+        </div>
+        <div class="news-card">
+            <h3>{ARTICLE_6['title']}</h3>
+            <div class="news-card-date">📍 Parkland County | 📅 {ARTICLE_6['date']}</div>
+            <p>{ARTICLE_6['content'][:200]}...</p>
+        </div>
+        <div class="news-card">
+            <h3>{ARTICLE_7['title']}</h3>
+            <div class="news-card-date">📍 Parkland County | 📅 {ARTICLE_7['date']}</div>
+            <p>{ARTICLE_7['content'][:200]}...</p>
+        </div>
+    '''
+    
     return f'''
     <!DOCTYPE html>
     <html>
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>{NEWSPAPER_NAME} - Spruce Grove's Trusted News Source</title>
+        <title>{NEWSPAPER_NAME} - Parkland County's Trusted News Source</title>
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
         <style>
             :root {{ --primary: #1a3d1a; --primary-light: #2C5F2D; --accent: #D4A017; }}
             * {{ margin: 0; padding: 0; box-sizing: border-box; }}
             body {{ font-family: 'Georgia', serif; background: #f9f9f5; }}
             
-            /* Header */
             .top-bar {{ background: var(--primary); color: white; font-size: 12px; padding: 8px 0; text-align: center; }}
             .header {{ background: white; padding: 30px 20px; text-align: center; border-bottom: 3px solid var(--accent); }}
             .logo h1 {{ font-size: 48px; color: var(--primary); }}
             .logo p {{ font-size: 14px; color: #666; letter-spacing: 2px; }}
             .date-header {{ background: #f0f0e8; padding: 10px; text-align: center; font-size: 14px; }}
             
-            /* Navigation */
             .nav {{ background: var(--primary); padding: 15px; text-align: center; position: sticky; top: 0; z-index: 100; }}
             .nav a {{ color: white; margin: 0 15px; text-decoration: none; text-transform: uppercase; font-size: 13px; }}
             .nav a:hover {{ color: var(--accent); }}
             
-            /* Hero */
             .hero {{ background: linear-gradient(135deg, #1a3d1a, #2C5F2D); color: white; padding: 40px 20px; text-align: center; }}
             .hero h2 {{ font-size: 36px; }}
             .hero p {{ font-size: 16px; margin-top: 10px; }}
@@ -134,30 +272,33 @@ def home():
             .search-bar input {{ flex: 1; padding: 12px; border: none; border-radius: 5px; }}
             .search-bar button {{ background: var(--accent); color: var(--primary); padding: 12px 20px; border: none; border-radius: 5px; cursor: pointer; }}
             
-            /* Main Content */
             .main-content {{ max-width: 1200px; margin: 0 auto; padding: 40px 20px; }}
             
-            /* Featured Article */
             .featured-article {{ background: white; border-radius: 10px; padding: 30px; margin-bottom: 40px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
             .featured-article h2 {{ color: var(--primary); margin-bottom: 15px; font-size: 28px; }}
             .featured-article h3 {{ color: var(--primary-light); margin: 20px 0 10px; }}
             .featured-article p {{ line-height: 1.8; margin-bottom: 15px; }}
-            .article-meta {{ color: #666; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 20px; font-size: 14px; }}
+            .article-meta {{ color: #666; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 15px; font-size: 14px; }}
+            .article-source {{ color: var(--accent); font-size: 12px; margin-bottom: 15px; }}
             
-            /* Stats */
+            .more-news {{ display: grid; grid-template-columns: repeat(2, 1fr); gap: 30px; margin-bottom: 40px; }}
+            .news-card {{ background: white; border-radius: 10px; padding: 25px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); transition: transform 0.3s; }}
+            .news-card:hover {{ transform: translateY(-3px); }}
+            .news-card h3 {{ color: var(--primary); margin-bottom: 10px; font-size: 18px; }}
+            .news-card-date {{ color: #999; font-size: 11px; margin-bottom: 15px; }}
+            .news-card p {{ color: #555; line-height: 1.5; font-size: 14px; }}
+            
             .stats {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 40px; }}
             .stat-card {{ background: white; padding: 30px; text-align: center; border-radius: 10px; transition: transform 0.3s; }}
             .stat-card:hover {{ transform: translateY(-5px); }}
             .stat-number {{ font-size: 36px; font-weight: bold; color: var(--primary); }}
             
-            /* Two Column Layout */
             .two-column {{ display: grid; grid-template-columns: 2fr 1fr; gap: 40px; margin-bottom: 40px; }}
             .section-title {{ font-size: 24px; color: var(--primary); border-left: 4px solid var(--accent); padding-left: 15px; margin-bottom: 20px; }}
             .feature-card {{ background: white; border-radius: 10px; padding: 25px; margin-bottom: 30px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }}
             .btn {{ display: inline-block; background: var(--primary); color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; margin-top: 15px; transition: background 0.3s; }}
             .btn:hover {{ background: #0d260d; }}
             
-            /* Weather Widget */
             .weather-widget {{ background: linear-gradient(135deg, #1e3c72, #2a5298); border-radius: 15px; padding: 20px; color: white; margin-bottom: 30px; }}
             .weather-header {{ display: flex; justify-content: space-between; margin-bottom: 20px; }}
             .weather-main {{ text-align: center; }}
@@ -168,17 +309,14 @@ def home():
             .forecast {{ display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-top: 20px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.2); }}
             .forecast-day {{ text-align: center; padding: 8px; background: rgba(255,255,255,0.1); border-radius: 8px; }}
             
-            /* Gallery */
             .gallery {{ display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin: 20px 0; }}
             .gallery-item {{ background: white; border-radius: 10px; padding: 15px; text-align: center; }}
             .gallery-placeholder {{ background: var(--primary-light); color: white; padding: 40px; border-radius: 8px; margin-bottom: 10px; }}
             
-            /* Newsletter */
             .newsletter {{ background: linear-gradient(135deg, var(--primary), #0d260d); color: white; padding: 40px; border-radius: 15px; text-align: center; margin: 40px 0; }}
             .newsletter input {{ padding: 12px; width: 250px; border: none; border-radius: 5px; margin: 10px; }}
             .newsletter button {{ background: var(--accent); color: var(--primary); padding: 12px 24px; border: none; border-radius: 5px; cursor: pointer; }}
             
-            /* Social */
             .social-section {{ background: white; padding: 30px; border-radius: 10px; text-align: center; margin-bottom: 40px; }}
             .social-links {{ display: flex; justify-content: center; gap: 15px; margin-top: 20px; flex-wrap: wrap; }}
             .social-btn {{ padding: 10px 20px; border-radius: 25px; text-decoration: none; color: white; }}
@@ -186,21 +324,14 @@ def home():
             .social-btn.facebook {{ background: #3b5998; }}
             .social-btn.email {{ background: #666; }}
             
-            /* Footer */
             .footer {{ background: #0d260d; color: white; text-align: center; padding: 40px; margin-top: 40px; }}
             .footer-content {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 30px; max-width: 1200px; margin: 0 auto; }}
             .footer-column a {{ color: #ccc; text-decoration: none; display: block; margin-bottom: 8px; font-size: 14px; }}
             .footer-column a:hover {{ color: var(--accent); }}
             .copyright {{ text-align: center; padding-top: 30px; margin-top: 30px; border-top: 1px solid rgba(255,255,255,0.1); font-size: 12px; }}
             
-            /* Classifieds Page */
-            .classifieds-container {{ max-width: 1200px; margin: 0 auto; padding: 40px 20px; }}
-            .category-filters {{ display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 30px; }}
-            .filter-btn {{ background: white; padding: 10px 20px; border: 1px solid #ddd; border-radius: 25px; cursor: pointer; text-decoration: none; color: #333; }}
-            .filter-btn.active {{ background: var(--primary); color: white; border-color: var(--primary); }}
-            .classified-card {{ background: white; border-radius: 10px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }}
-            
             @media (max-width: 768px) {{
+                .more-news {{ grid-template-columns: 1fr; }}
                 .stats {{ grid-template-columns: repeat(2, 1fr); }}
                 .two-column {{ grid-template-columns: 1fr; }}
                 .footer-content {{ grid-template-columns: repeat(2, 1fr); }}
@@ -211,13 +342,13 @@ def home():
         </style>
     </head>
     <body>
-        <div class="top-bar">🌿 Spruce Grove's Primary Resource for Trade & Employment | "Your Hometown, Online."</div>
+        <div class="top-bar">🌿 Serving Spruce Grove & Parkland County | "Your Hometown, Online."</div>
         
         <div class="header">
             <div class="logo">
                 <h1>📰 {NEWSPAPER_NAME}</h1>
                 <p>ESTABLISHED {LAUNCH_DATE} | INDEPENDENT & LOCAL</p>
-                <div style="font-size: 12px; color: #D4A017; margin-top: 5px;">"Your Hometown, Online." • Spruce Grove's Primary Resource for Trade & Employment</div>
+                <div style="font-size: 12px; color: #D4A017; margin-top: 5px;">Serving Spruce Grove, Parkland County, Stony Plain & surrounding areas</div>
             </div>
         </div>
         
@@ -232,7 +363,7 @@ def home():
         
         <div class="hero">
             <h2>Your Hometown, Online.</h2>
-            <p>Spruce Grove's Primary Resource for Trade & Employment</p>
+            <p>Serving Spruce Grove, Parkland County, Stony Plain and surrounding areas</p>
             <form class="search-bar" action="/search" method="GET">
                 <input type="text" name="q" placeholder="Search Gazette dispatches, events, and archives...">
                 <button type="submit"><i class="fas fa-search"></i> Search</button>
@@ -240,22 +371,35 @@ def home():
         </div>
         
         <div class="main-content">
-            <!-- Featured Article - Front and Center -->
+            <!-- Featured Article -->
             <div class="featured-article">
-                <div class="article-meta">📍 Spruce Grove, AB | 📅 {ARTICLE_DATE}</div>
-                {ARTICLE_CONTENT}
+                <div class="article-meta">📍 Parkland County | 📅 {FEATURED_ARTICLE['date']}</div>
+                <div class="article-source">Source: {FEATURED_ARTICLE['source']}</div>
+                <h2>{FEATURED_ARTICLE['title']}</h2>
+                {FEATURED_ARTICLE['content']}
+            </div>
+            
+            <!-- More News Grid -->
+            <h2 class="section-title">📰 More Parkland County News</h2>
+            <div class="more-news">
+                {more_news_grid}
+                <div class="news-card">
+                    <h3>{ARTICLE_8['title']}</h3>
+                    <div class="news-card-date">📍 Parkland County | 📅 {ARTICLE_8['date']}</div>
+                    <p>{ARTICLE_8['content'][:200]}...</p>
+                </div>
             </div>
             
             <div class="stats">
-                <div class="stat-card"><i class="fas fa-newspaper"></i><div class="stat-number">1</div><div>Dispatch</div></div>
-                <div class="stat-card"><i class="fas fa-tags"></i><div class="stat-number">5</div><div>Categories</div></div>
+                <div class="stat-card"><i class="fas fa-newspaper"></i><div class="stat-number">8</div><div>Dispatches</div></div>
+                <div class="stat-card"><i class="fas fa-tags"></i><div class="stat-number">6</div><div>Categories</div></div>
                 <div class="stat-card"><i class="fas fa-users"></i><div class="stat-number">{len(subscribers)}</div><div>Subscribers</div></div>
                 <div class="stat-card"><i class="fas fa-clock"></i><div class="stat-number">5 AM</div><div>Daily Delivery</div></div>
             </div>
             
             <div class="two-column">
                 <div>
-                    <h2 class="section-title">📸 Community Photos</h2>
+                    <h2 class="section-title">📸 Parkland County in Photos</h2>
                     <div class="gallery">{gallery_html}</div>
                 </div>
                 
@@ -282,7 +426,7 @@ def home():
                         </div>
                     </div>
                     
-                    <h2 class="section-title">📅 Upcoming Events</h2>
+                    <h2 class="section-title">📅 Upcoming Public Hearings & Events</h2>
                     <div class="feature-card">
                         <ul style="list-style: none;">{events_html}</ul>
                     </div>
@@ -329,21 +473,20 @@ def home():
                     <a href="mailto:editor@sprucegrovegazette.com">editor@sprucegrovegazette.com</a>
                 </div>
                 <div class="footer-column">
-                    <h4>🔗 Categories</h4>
-                    <a href="/classifieds?category=jobs">Jobs</a>
-                    <a href="/classifieds?category=sale">For Sale</a>
-                    <a href="/classifieds?category=housing">Housing</a>
-                    <a href="/classifieds?category=services">Services</a>
+                    <h4>🔗 Resources</h4>
+                    <a href="https://www.parklandcounty.com" target="_blank">Parkland County</a>
+                    <a href="https://www.psd.ca" target="_blank">Parkland School Division</a>
                 </div>
                 <div class="footer-column">
-                    <h4>📍 Location</h4>
-                    <a href="#">Spruce Grove, Alberta</a>
-                    <a href="#">"Your Hometown, Online."</a>
+                    <h4>📍 Our Region</h4>
+                    <a href="#">Spruce Grove</a>
+                    <a href="#">Parkland County</a>
+                    <a href="#">Stony Plain</a>
                 </div>
             </div>
             <div class="copyright">
                 <p>© {datetime.now().year} {NEWSPAPER_NAME}. All rights reserved.</p>
-                <p>Proudly serving Spruce Grove since {LAUNCH_DATE}</p>
+                <p>Serving Spruce Grove, Parkland County, and surrounding areas since {LAUNCH_DATE}</p>
             </div>
         </div>
     </body>
@@ -351,7 +494,7 @@ def home():
     '''
 
 # ============================================
-# Classifieds Routes - Empty by Default
+# Classifieds Routes (same as before)
 # ============================================
 
 @app.route('/classifieds')
@@ -489,7 +632,7 @@ def post_ad():
         <div class="container">
             <div class="form-card">
                 <h2>📝 Post an Ad</h2>
-                <p>Reach the Spruce Grove community with your listing.</p>
+                <p>Reach the Spruce Grove and Parkland County community.</p>
                 <form method="POST">
                     <select name="category" required>
                         <option value="">Select Category</option>
@@ -514,10 +657,6 @@ def post_ad():
     </body>
     </html>
     '''
-
-# ============================================
-# Other Routes
-# ============================================
 
 @app.route('/subscribe')
 def subscribe():
