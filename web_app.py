@@ -484,59 +484,152 @@ def article_page(article_id):
     '''
 
 # ============================================
-# ADVERTISING ROUTE
-# ============================================
+# ADVERTISING ROUTES# ============================================
 
 @app.route('/advertise')
 def advertise():
     return '''
     <!DOCTYPE html>
     <html>
-    <head><title>Advertise With Us</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-        body { font-family: Georgia; background: #f9f9f5; margin: 0; }
-        .header { background: #1a3d1a; color: white; padding: 40px; text-align: center; }
-        .container { max-width: 1200px; margin: 0 auto; padding: 50px 20px; }
-        .stats-banner { background: white; border-radius: 15px; padding: 30px; text-align: center; margin-bottom: 50px; }
-        .stat-grid { display: flex; justify-content: center; gap: 50px; flex-wrap: wrap; }
-        .stat-number { font-size: 42px; font-weight: bold; color: #D4A017; }
-        .package-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 30px; margin: 50px 0; }
-        .package-card { background: white; border-radius: 15px; padding: 35px; text-align: center; }
-        .package-card.featured { border: 2px solid #D4A017; position: relative; }
-        .popular-badge { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: #D4A017; padding: 5px 20px; border-radius: 20px; font-size: 12px; }
-        .package-price { font-size: 36px; font-weight: bold; color: #D4A017; margin: 20px 0; }
-        .btn-inquire { background: #1a3d1a; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block; }
-        .contact-form { background: white; border-radius: 15px; padding: 40px; margin: 50px 0; }
-        input, select, textarea { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px; }
-        button { background: #1a3d1a; color: white; padding: 12px 30px; border: none; border-radius: 5px; cursor: pointer; }
-        .footer { background: #0d260d; color: white; text-align: center; padding: 30px; }
-        @media (max-width: 768px) { .package-grid { grid-template-columns: 1fr; } }
-    </style>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Advertise With Us - Spruce Grove Gazette</title>
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+        <style>
+            :root { --primary: #1a3d1a; --primary-light: #2C5F2D; --accent: #D4A017; }
+            body { font-family: 'Georgia', serif; background: #f9f9f5; margin: 0; }
+            .header { background: var(--primary); color: white; padding: 40px; text-align: center; }
+            .header h1 { margin: 0; font-size: 42px; }
+            .header p { font-size: 18px; margin-top: 10px; opacity: 0.9; }
+            .container { max-width: 1200px; margin: 0 auto; padding: 50px 20px; }
+            .stats-banner { background: white; border-radius: 15px; padding: 30px; text-align: center; margin-bottom: 50px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+            .stat-grid { display: flex; justify-content: center; gap: 50px; flex-wrap: wrap; }
+            .stat-number { font-size: 42px; font-weight: bold; color: var(--accent); }
+            .package-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 30px; margin: 50px 0; }
+            .package-card { background: white; border-radius: 15px; padding: 35px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.1); transition: transform 0.3s; }
+            .package-card:hover { transform: translateY(-5px); }
+            .package-card.featured { border: 2px solid var(--accent); position: relative; }
+            .popular-badge { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: var(--accent); color: var(--primary); padding: 5px 20px; border-radius: 20px; font-size: 12px; font-weight: bold; }
+            .package-icon { font-size: 48px; color: var(--primary); margin-bottom: 20px; }
+            .package-name { font-size: 24px; font-weight: bold; color: var(--primary); margin-bottom: 15px; }
+            .package-price { font-size: 36px; font-weight: bold; color: var(--accent); margin: 20px 0; }
+            .package-price small { font-size: 14px; font-weight: normal; color: #666; }
+            .package-features { list-style: none; text-align: left; margin: 25px 0; }
+            .package-features li { padding: 8px 0; border-bottom: 1px solid #eee; }
+            .package-features i { color: #27ae60; margin-right: 10px; width: 20px; }
+            .btn-inquire { display: inline-block; background: var(--primary); color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; margin-top: 20px; transition: background 0.3s; }
+            .btn-inquire:hover { background: #0d260d; }
+            .testimonials { background: white; border-radius: 15px; padding: 40px; margin: 50px 0; text-align: center; }
+            .testimonial-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 30px; margin-top: 30px; }
+            .testimonial-card { background: #f9f9f5; padding: 25px; border-radius: 10px; text-align: left; }
+            .testimonial-text { font-style: italic; margin-bottom: 15px; }
+            .testimonial-author { font-weight: bold; color: var(--primary); }
+            .faq-section { background: white; border-radius: 15px; padding: 40px; margin: 50px 0; }
+            .faq-item { margin-bottom: 20px; }
+            .faq-question { font-weight: bold; color: var(--primary); margin-bottom: 8px; }
+            .contact-form { background: white; border-radius: 15px; padding: 40px; margin: 50px 0; }
+            .contact-form h3 { text-align: center; margin-bottom: 30px; }
+            .form-group { margin-bottom: 20px; }
+            input, select, textarea { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 5px; font-family: inherit; }
+            button { background: var(--primary); color: white; padding: 12px 30px; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; font-weight: bold; }
+            .footer { background: #0d260d; color: white; text-align: center; padding: 30px; margin-top: 40px; }
+            @media (max-width: 768px) { .package-grid { grid-template-columns: 1fr; } .testimonial-grid { grid-template-columns: 1fr; } }
+        </style>
     </head>
     <body>
-        <div class="header"><h1>📰 Advertise With The Gazette</h1><p>Reach thousands of local readers</p></div>
+        <div class="header">
+            <h1>📰 Advertise With The Gazette</h1>
+            <p>Reach thousands of engaged local readers in Spruce Grove and Parkland County</p>
+        </div>
+        
         <div class="container">
-            <div class="stats-banner"><div class="stat-grid"><div><div class="stat-number">10,000+</div>Monthly Readers</div><div><div class="stat-number">500+</div>Newsletter Subscribers</div><div><div class="stat-number">100%</div>Local Audience</div></div></div>
-            <div class="package-grid">
-                <div class="package-card"><h3>Digital Display</h3><div class="package-price">$150<span style="font-size:14px">/month</span></div><p>Banner ad on homepage</p><a href="/inquire?package=display" class="btn-inquire">Get Started →</a></div>
-                <div class="package-card featured"><div class="popular-badge">MOST POPULAR</div><h3>Sponsored Article</h3><div class="package-price">$250<span style="font-size:14px">/article</span></div><p>Professional feature story</p><a href="/inquire?package=sponsored" class="btn-inquire">Get Started →</a></div>
-                <div class="package-card"><h3>Community Spotlight</h3><div class="package-price">$400<span style="font-size:14px">/month</span></div><p>Weekly business feature</p><a href="/inquire?package=spotlight" class="btn-inquire">Get Started →</a></div>
+            <div class="stats-banner">
+                <div class="stat-grid">
+                    <div><div class="stat-number">10,000+</div>Monthly Readers</div>
+                    <div><div class="stat-number">500+</div>Newsletter Subscribers</div>
+                    <div><div class="stat-number">100%</div>Local Audience</div>
+                    <div><div class="stat-number">85%</div>Open Rate</div>
+                </div>
             </div>
-            <div class="contact-form">
-                <h3>Request a Media Kit</h3>
-                <form action="/inquire" method="POST">
-                    <input type="text" name="business_name" placeholder="Business Name" required>
-                    <input type="text" name="contact_name" placeholder="Your Name" required>
-                    <input type="email" name="email" placeholder="Email Address" required>
-                    <input type="tel" name="phone" placeholder="Phone Number">
-                    <select name="package_interest"><option value="">I'm interested in...</option><option>Digital Display Ad</option><option>Sponsored Article</option><option>Community Spotlight</option></select>
-                    <textarea name="message" rows="4" placeholder="Tell us about your business..."></textarea>
-                    <button type="submit">Send Inquiry →</button>
-                </form>
+            
+            <div class="package-grid">
+                <div class="package-card">
+                    <div class="package-icon"><i class="fas fa-bullhorn"></i></div>
+                    <div class="package-name">Digital Display</div>
+                    <div class="package-price">$150<span><small>/month</small></span></div>
+                    <ul class="package-features">
+                        <li><i class="fas fa-check"></i> Banner ad on homepage</li>
+                        <li><i class="fas fa-check"></i> 25,000+ monthly impressions</li>
+                        <li><i class="fas fa-check"></i> Mobile & desktop optimized</li>
+                        <li><i class="fas fa-check"></i> Monthly performance report</li>
+                    </ul>
+                    <a href="/inquire?package=display" class="btn-inquire">Get Started →</a>
+                </div>
+                
+                <div class="package-card featured">
+                    <div class="popular-badge">MOST POPULAR</div>
+                    <div class="package-icon"><i class="fas fa-pen-fancy"></i></div>
+                    <div class="package-name">Sponsored Article</div>
+                    <div class="package-price">$250<span><small>/article</small></span></div>
+                    <ul class="package-features">
+                        <li><i class="fas fa-check"></i> Professionally written feature</li>
+                        <li><i class="fas fa-check"></i> Social media promotion</li>
+                        <li><i class="fas fa-check"></i> Featured in newsletter</li>
+                        <li><i class="fas fa-check"></i> Permanent archive placement</li>
+                    </ul>
+                    <a href="/inquire?package=sponsored" class="btn-inquire">Get Started →</a>
+                </div>
+                
+                <div class="package-card">
+                    <div class="package-icon"><i class="fas fa-star"></i></div>
+                    <div class="package-name">Community Spotlight</div>
+                    <div class="package-price">$400<span><small>/month</small></span></div>
+                    <ul class="package-features">
+                        <li><i class="fas fa-check"></i> Weekly featured business</li>
+                        <li><i class="fas fa-check"></i> Social media takeover</li>
+                        <li><i class="fas fa-check"></i> Email feature to subscribers</li>
+                        <li><i class="fas fa-check"></i> Logo placement on homepage</li>
+                    </ul>
+                    <a href="/inquire?package=spotlight" class="btn-inquire">Get Started →</a>
+                </div>
+            </div>
+            
+            <div class="testimonials">
+                <h2>What Our Advertisers Say</h2>
+                <div class="testimonial-grid">
+                    <div class="testimonial-card">
+                        <div class="testimonial-text">"The Spruce Grove Gazette helped us reach new customers we couldn't find elsewhere. Our sponsored article brought in over 20 new clients!"</div>
+                        <div class="testimonial-author">— Main Street Coffee, Spruce Grove</div>
+                    </div>
+                    <div class="testimonial-card">
+                        <div class="testimonial-text">"Best local advertising investment we've made. The community engagement and response has been outstanding."</div>
+                        <div class="testimonial-author">— Spruce Grove Home Hardware</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="faq-section">
+                <h2 style="text-align: center;">Frequently Asked Questions</h2>
+                <div class="faq-item">
+                    <div class="faq-question">❓ How long does it take to get started?</div>
+                    <div class="faq-answer">Most campaigns launch within 2-3 business days after signing up.</div>
+                </div>
+                <div class="faq-item">
+                    <div class="faq-question">❓ Can I see analytics for my ad?</div>
+                    <div class="faq-answer">Yes! We provide monthly performance reports including impressions, clicks, and engagement metrics.</div>
+                </div>
+                <div class="faq-item">
+                    <div class="faq-question">❓ Do you offer custom packages?</div>
+                    <div class="faq-answer">Absolutely! Contact us for a customized advertising solution tailored to your business needs.</div>
+                </div>
             </div>
         </div>
-        <div class="footer"><p><a href="/" style="color: white;">← Back to Home</a></p></div>
+        
+        <div class="footer">
+            <p><a href="/" style="color: white;">← Back to Home</a></p>
+            <p>© {datetime.now().year} {NEWSPAPER_NAME} | Serving Spruce Grove & Parkland County</p>
+        </div>
     </body>
     </html>
     '''
@@ -553,8 +646,83 @@ def inquire():
              datetime.now().date(), 'new'))
         conn.commit()
         conn.close()
-        return '<html><body style="text-align:center;padding:50px"><h1>✅ Thank You!</h1><p>We will contact you within 24 hours.</p><a href="/">← Back</a></body></html>'
-    return redirect('/advertise')
+        
+        return '''
+        <!DOCTYPE html>
+        <html>
+        <head><title>Inquiry Sent</title></head>
+        <body style="font-family: Georgia; text-align: center; padding: 50px;">
+            <h1 style="color: #1a3d1a;">✅ Thank You!</h1>
+            <p>Your advertising inquiry has been received. We'll be in touch within 24 hours.</p>
+            <a href="/" style="color: #1a3d1a;">← Back to Home</a>
+            <a href="/advertise" style="color: #1a3d1a; margin-left: 20px;">View Advertising Options →</a>
+        </body>
+        </html>
+        '''
+    
+    # GET request - show inquiry form
+    package = request.args.get('package', '')
+    return f'''
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Advertising Inquiry - Spruce Grove Gazette</title>
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+        <style>
+            body {{ font-family: Georgia, serif; background: #f9f9f5; margin: 0; }}
+            .header {{ background: #1a3d1a; color: white; padding: 30px; text-align: center; }}
+            .header h1 {{ margin: 0; font-size: 32px; }}
+            .container {{ max-width: 600px; margin: 0 auto; padding: 40px 20px; }}
+            .form-card {{ background: white; border-radius: 15px; padding: 30px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }}
+            input, select, textarea {{ width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px; font-family: inherit; }}
+            button {{ background: #1a3d1a; color: white; padding: 12px 30px; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; font-weight: bold; }}
+            button:hover {{ background: #0d260d; }}
+            .btn-back {{ display: inline-block; background: #666; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 20px; }}
+            .footer {{ background: #0d260d; color: white; text-align: center; padding: 30px; margin-top: 40px; }}
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h1>📰 Advertising Inquiry</h1>
+            <p>Tell us about your business and we'll create a custom proposal</p>
+        </div>
+        <div class="container">
+            <div class="form-card">
+                <h2>Request Information</h2>
+                <p>Fill out the form below and we'll send you our complete media kit with rates and audience demographics.</p>
+                <form method="POST">
+                    <input type="text" name="business_name" placeholder="Business Name" required>
+                    <input type="text" name="contact_name" placeholder="Your Name" required>
+                    <input type="email" name="email" placeholder="Email Address" required>
+                    <input type="tel" name="phone" placeholder="Phone Number">
+                    <select name="package_interest">
+                        <option value="">I'm interested in...</option>
+                        <option value="Digital Display Ad" {'selected' if package == 'display' else ''}>Digital Display Ad ($150/month)</option>
+                        <option value="Sponsored Article" {'selected' if package == 'sponsored' else ''}>Sponsored Article ($250/article)</option>
+                        <option value="Community Spotlight" {'selected' if package == 'spotlight' else ''}>Community Spotlight ($400/month)</option>
+                        <option value="Custom Package">Custom Package</option>
+                    </select>
+                    <textarea name="message" rows="5" placeholder="Tell us about your business and advertising goals..."></textarea>
+                    <button type="submit">Send Inquiry →</button>
+                </form>
+                <div style="text-align: center; margin-top: 20px;">
+                    <a href="/advertise" class="btn-back">← Back to Advertising Options</a>
+                </div>
+            </div>
+        </div>
+        <div class="footer">
+            <p><a href="/" style="color: white;">← Back to Home</a></p>
+            <p>© {datetime.now().year} {NEWSPAPER_NAME}</p>
+        </div>
+    </body>
+    </html>
+    '''
+
+# ============================================
+# SUPPORTER ROUTE
+# ============================================
 
 @app.route('/support')
 def support():
@@ -585,6 +753,10 @@ def support():
     </body>
     </html>
     '''
+
+# ============================================
+# FOOD BANK ROUTE
+# ============================================
 
 @app.route('/foodbank')
 def foodbank():
@@ -629,6 +801,10 @@ def foodbank():
     </html>
     '''
 
+# ============================================
+# EVENTS ROUTES
+# ============================================
+
 @app.route('/events')
 def events_list():
     events = get_events(20)
@@ -665,6 +841,10 @@ def create_event():
     <body><div class="container"><h1>📅 Create an Event</h1><form method="POST"><input type="text" name="title" placeholder="Event Title" required><textarea name="description" rows="4" placeholder="Description"></textarea><input type="date" name="date" required><input type="text" name="time" placeholder="Time"><input type="text" name="location" placeholder="Location"><input type="text" name="ticket_price" placeholder="Ticket price (or Free)"><input type="number" name="total_tickets" placeholder="Total tickets"><input type="text" name="organizer" placeholder="Organizer"><input type="email" name="email" placeholder="Contact email"><button type="submit">Create Event →</button></form><a href="/events">← Back</a></div></body>
     </html>
     '''
+
+# ============================================
+# CLASSIFIEDS ROUTES
+# ============================================
 
 @app.route('/classifieds')
 def classifieds():
@@ -707,6 +887,10 @@ def post_ad():
     <body><div class="container"><h1>📝 Post a Classified Ad</h1><form method="POST"><select name="category"><option>Jobs</option><option>For Sale</option><option>Housing</option><option>Services</option><option>Garage Sale</option></select><input type="text" name="title" placeholder="Ad Title" required><textarea name="description" rows="4" placeholder="Description"></textarea><input type="text" name="price" placeholder="Price"><input type="text" name="contact" placeholder="Contact info"><input type="email" name="email" placeholder="Email"><input type="text" name="phone" placeholder="Phone"><button type="submit">Post Ad →</button></form><a href="/classifieds">← Back</a></div></body>
     </html>
     '''
+
+# ============================================
+# SUBSCRIBE & OTHER ROUTES
+# ============================================
 
 @app.route('/subscribe')
 def subscribe():
