@@ -203,96 +203,16 @@ def get_businesses(category=None, limit=6):
 # ============================================
 
 news_articles = [
-    {
-        "id": 1,
-        "title": "Province Pledges $136 Million for Parkland County Highway Upgrades",
-        "date": "March 4, 2026",
-        "source": "Parkland County",
-        "summary": "The Government of Alberta's 2026 Budget confirms continued investment in Highway 60 twinning between Highways 16 and 16A, including a rail overpass to support the Acheson Industrial Area. An additional $20 million has been committed for Highway 16 improvements at Range Road 20, moving to design phase in 2026.",
-        "category": "Infrastructure",
-        "featured": True
-    },
-    {
-        "id": 2,
-        "title": "Parkland Food Bank Secures Land for New $1.2 Million Facility",
-        "date": "January 4, 2026",
-        "source": "Parkland Food Bank",
-        "summary": "After 40 years of serving the Tri-Region, the Parkland Food Bank has purchased a 2.86-acre property in Spruce Grove for a new, larger facility. 'This new chapter is our opportunity to shape the future of food security in the Tri-Region,' said Executive Director Sheri Ratsoy.",
-        "category": "Community",
-        "featured": True
-    },
-    {
-        "id": 3,
-        "title": "Panthers Advance to Regional Finals After Thrilling Overtime Victory",
-        "date": "April 23, 2026",
-        "source": "Spruce Grove Panthers",
-        "summary": "The Spruce Grove Panthers secured their spot in the regional finals with a dramatic 34-31 overtime victory against the St. Albert Storm. Quarterback Marcus Chen threw for 287 yards and three touchdowns, including the game-winning 18-yard strike in overtime.",
-        "category": "Sports",
-        "featured": False
-    },
-    {
-        "id": 4,
-        "title": "New Tech Hub Coming to Downtown Spruce Grove, Creating 150 Jobs",
-        "date": "April 22, 2026",
-        "source": "City of Spruce Grove",
-        "summary": "Nexus Digital Solutions will renovate the historic Johnson Building on Main Street, transforming it into a modern workspace while preserving its heritage character. The $25 million project is expected to bring 150 high-tech jobs to the region.",
-        "category": "Business",
-        "featured": False
-    },
-    {
-        "id": 5,
-        "title": "Parkland School Division Receives $354,000 Annual Mental Health Grant",
-        "date": "December 18, 2025",
-        "source": "Parkland School Division",
-        "summary": "The division received approximately $834,000 through the Mental Health in School Pilot project. Alberta Education has now added a wellbeing and mental health grant to the funding manual, with PSD receiving approximately $354,000 annually.",
-        "category": "Education",
-        "featured": False
-    },
-    {
-        "id": 6,
-        "title": "Parkland County Secures $200,000 Grant for Sturgeon River Watershed Protection",
-        "date": "May 27, 2025",
-        "source": "Parkland County Council",
-        "summary": "The funding through the Alberta Community Partnership Program supports the Sturgeon River Watershed Alliance. The grant includes $80,000 for water quality evaluation and $120,000 for an Infrastructure Management Framework for Watershed Health.",
-        "category": "Environment",
-        "featured": False
-    },
-    {
-        "id": 7,
-        "title": "Tri Leisure Centre Receives $235,313 Grant for Boiler Replacement",
-        "date": "December 9, 2025",
-        "source": "Parkland County Council",
-        "summary": "Council approved grant funds for energy reduction projects at the Tri Leisure Centre, including a boiler replacement project partially funded by a $235,313 grant. The project represents a significant step in reducing energy consumption.",
-        "category": "Recreation",
-        "featured": False
-    },
-    {
-        "id": 8,
-        "title": "Council Approves $250,000 for Fire Tanker Replacement",
-        "date": "December 9, 2025",
-        "source": "Parkland County Council",
-        "summary": "Parkland County Council has approved $250,000 in additional funding from the Lifecycle Restricted Surplus Account for the replacement of a fire water tanker truck for Fire District 1, enhancing emergency response capacity.",
-        "category": "Emergency Services",
-        "featured": False
-    },
-    {
-        "id": 9,
-        "title": "Public Hearing Set for March 24 on Proposed Road Closure",
-        "date": "March 10, 2026",
-        "source": "Parkland County",
-        "summary": "A public hearing has been scheduled for March 24, 2026, regarding Bylaw 2026-13, which proposes to close a portion of road for sale in Parkland County. The hearing will take place at 10:30 a.m. in the Council Chambers.",
-        "category": "Government",
-        "featured": False
-    },
-    {
-        "id": 10,
-        "title": "County Recognizes November as Family Violence Prevention Month",
-        "date": "September 9, 2025",
-        "source": "Parkland County Council",
-        "summary": "Parkland County Council has officially proclaimed several awareness campaigns for November 2025, including Family Violence Prevention Month, Seniors' Fall Prevention Month, Restorative Justice Week, GIS Day, and World Pancreatic Cancer Day.",
-        "category": "Community",
-        "featured": False
-    }
+    {"id": 1, "title": "Province Pledges $136 Million for Parkland County Highway Upgrades", "date": "March 4, 2026", "source": "Parkland County", "summary": "The Government of Alberta's 2026 Budget confirms continued investment in Highway 60 twinning between Highways 16 and 16A, including a rail overpass to support the Acheson Industrial Area. An additional $20 million has been committed for Highway 16 improvements at Range Road 20, moving to design phase in 2026.", "category": "Infrastructure", "featured": True},
+    {"id": 2, "title": "Parkland Food Bank Secures Land for New $1.2 Million Facility", "date": "January 4, 2026", "source": "Parkland Food Bank", "summary": "After 40 years of serving the Tri-Region, the Parkland Food Bank has purchased a 2.86-acre property in Spruce Grove for a new, larger facility.", "category": "Community", "featured": False},
+    {"id": 3, "title": "Panthers Advance to Regional Finals After Thrilling Overtime Victory", "date": "April 23, 2026", "source": "Spruce Grove Panthers", "summary": "The Spruce Grove Panthers secured their spot in the regional finals with a dramatic 34-31 overtime victory against the St. Albert Storm. Quarterback Marcus Chen threw for 287 yards and three touchdowns.", "category": "Sports", "featured": False},
+    {"id": 4, "title": "New Tech Hub Coming to Downtown Spruce Grove, Creating 150 Jobs", "date": "April 22, 2026", "source": "City of Spruce Grove", "summary": "Nexus Digital Solutions will renovate the historic Johnson Building on Main Street, transforming it into a modern workspace while preserving its heritage character. The $25 million project is expected to bring 150 high-tech jobs.", "category": "Business", "featured": False},
+    {"id": 5, "title": "Parkland School Division Receives $354,000 Annual Mental Health Grant", "date": "December 18, 2025", "source": "Parkland School Division", "summary": "The division received approximately $834,000 through the Mental Health in School Pilot project. Alberta Education has now added a wellbeing and mental health grant to the funding manual, with PSD receiving approximately $354,000 annually.", "category": "Education", "featured": False},
+    {"id": 6, "title": "Parkland County Secures $200,000 Grant for Sturgeon River Watershed Protection", "date": "May 27, 2025", "source": "Parkland County Council", "summary": "The funding through the Alberta Community Partnership Program supports the Sturgeon River Watershed Alliance. The grant includes $80,000 for water quality evaluation and $120,000 for an Infrastructure Management Framework.", "category": "Environment", "featured": False},
+    {"id": 7, "title": "Tri Leisure Centre Receives $235,313 Grant for Boiler Replacement", "date": "December 9, 2025", "source": "Parkland County Council", "summary": "Council approved grant funds for energy reduction projects at the Tri Leisure Centre, including a boiler replacement project partially funded by a $235,313 grant.", "category": "Recreation", "featured": False},
+    {"id": 8, "title": "Council Approves $250,000 for Fire Tanker Replacement", "date": "December 9, 2025", "source": "Parkland County Council", "summary": "Parkland County Council has approved $250,000 in additional funding from the Lifecycle Restricted Surplus Account for the replacement of a fire water tanker truck for Fire District 1.", "category": "Emergency Services", "featured": False},
+    {"id": 9, "title": "Public Hearing Set for March 24 on Proposed Road Closure", "date": "March 10, 2026", "source": "Parkland County", "summary": "A public hearing has been scheduled for March 24, 2026, regarding Bylaw 2026-13, which proposes to close a portion of road for sale in Parkland County.", "category": "Government", "featured": False},
+    {"id": 10, "title": "County Recognizes November as Family Violence Prevention Month", "date": "September 9, 2025", "source": "Parkland County Council", "summary": "Parkland County Council has officially proclaimed several awareness campaigns for November 2025, including Family Violence Prevention Month, Seniors' Fall Prevention Month, Restorative Justice Week, GIS Day, and World Pancreatic Cancer Day.", "category": "Community", "featured": False}
 ]
 
 # ============================================
@@ -305,34 +225,18 @@ def home():
     events = get_events(5)
     businesses = get_businesses('all', 6)
     
-    # Get featured article
-    featured_articles = [a for a in news_articles if a.get('featured', False)]
-    featured = featured_articles[0] if featured_articles else news_articles[0]
+    featured = news_articles[0]
+    other_articles = news_articles[1:7]
     
-    # Get remaining articles (excluding featured)
-    other_articles = [a for a in news_articles if a['id'] != featured['id']][:5]
-    
-    forecast_html = ''.join([f'''
-        <div class="forecast-day">
-            <div class="forecast-day-name">{f["day"]}</div>
-            <div class="forecast-icon">{f["icon"]}</div>
-            <div class="forecast-temp">{f["high"]}° / {f["low"]}°</div>
-        </div>
-    ''' for f in weather['forecast']])
+    forecast_html = ''.join([f'<div class="forecast-day"><div class="forecast-day-name">{f["day"]}</div><div class="forecast-icon">{f["icon"]}</div><div class="forecast-temp">{f["high"]}&deg; / {f["low"]}&deg;</div></div>' for f in weather['forecast']])
     
     events_html = ''.join([f'<li><strong>{e["title"]}</strong><br>{e["date"]} at {e["time"]}<br>📍 {e["location"]}</li>' for e in events])
     
-    businesses_html = ''.join([f'''
-        <div class="business-card">
-            <h4>{b["name"]}</h4>
-            <div class="business-category">{b["category"]}</div>
-            <p>{b["description"][:100]}...</p>
-            <div class="business-contact"><i class="fas fa-phone"></i> {b["phone"]}</div>
-        </div>
-    ''' for b in businesses])
+    businesses_html = ''.join([f'<div class="business-card"><h4>{b["name"]}</h4><div class="business-category">{b["category"]}</div><p>{b["description"][:100]}...</p><div class="business-contact"><i class="fas fa-phone"></i> {b["phone"]}</div></div>' for b in businesses])
     
-    # Create other articles HTML
-    other_articles_html = ''.join([f'''
+    other_articles_html = ''
+    for a in other_articles:
+        other_articles_html += f'''
         <div class="news-item">
             <div class="news-category">{a["category"]}</div>
             <h3><a href="/article/{a["id"]}" style="color: var(--primary); text-decoration: none;">{a["title"]}</a></h3>
@@ -340,7 +244,7 @@ def home():
             <p>{a["summary"][:150]}...</p>
             <a href="/article/{a["id"]}" class="read-more">Read More →</a>
         </div>
-    ''' for a in other_articles_html])
+        '''
     
     return f'''
     <!DOCTYPE html>
@@ -355,57 +259,42 @@ def home():
             :root {{ --primary: #1a3d1a; --primary-light: #2C5F2D; --accent: #D4A017; }}
             * {{ margin: 0; padding: 0; box-sizing: border-box; }}
             body {{ font-family: 'Georgia', serif; background: #f9f9f5; }}
-            
             .top-bar {{ background: var(--primary); color: white; font-size: 11px; padding: 8px 0; text-align: center; }}
             .header {{ background: white; padding: 25px 20px; text-align: center; border-bottom: 3px solid var(--accent); }}
             .logo h1 {{ font-size: 44px; color: var(--primary); }}
             .logo p {{ font-size: 12px; color: #666; letter-spacing: 2px; }}
             .date-header {{ background: #f0f0e8; padding: 8px; text-align: center; font-size: 13px; }}
-            
             .nav {{ background: var(--primary); padding: 12px; text-align: center; position: sticky; top: 0; z-index: 100; overflow-x: auto; white-space: nowrap; }}
             .nav a {{ color: white; margin: 0 12px; text-decoration: none; text-transform: uppercase; font-size: 12px; display: inline-block; }}
             .nav a:hover {{ color: var(--accent); }}
-            
             .hero {{ background: linear-gradient(135deg, #1a3d1a, #2C5F2D); color: white; padding: 40px 20px; text-align: center; }}
             .hero h2 {{ font-size: 32px; }}
             .hero p {{ font-size: 14px; margin-top: 8px; }}
             .search-bar {{ max-width: 500px; margin: 20px auto 0; display: flex; gap: 10px; }}
             .search-bar input {{ flex: 1; padding: 12px; border: none; border-radius: 5px; }}
             .search-bar button {{ background: var(--accent); color: var(--primary); padding: 12px 20px; border: none; border-radius: 5px; cursor: pointer; }}
-            
             .main-content {{ max-width: 1200px; margin: 0 auto; padding: 30px 20px; }}
-            
             .quick-links {{ display: flex; justify-content: center; gap: 15px; flex-wrap: wrap; margin-bottom: 30px; }}
             .quick-link {{ background: white; padding: 12px 25px; border-radius: 30px; text-decoration: none; color: var(--primary); font-weight: bold; }}
             .quick-link:hover {{ background: var(--accent); }}
-            
             .stats {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 40px; }}
             .stat-card {{ background: white; padding: 25px; text-align: center; border-radius: 10px; }}
             .stat-number {{ font-size: 32px; font-weight: bold; color: var(--primary); }}
-            
-            /* Featured Article */
             .featured-article {{ background: white; border-radius: 15px; padding: 30px; margin-bottom: 40px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }}
             .featured-badge {{ display: inline-block; background: var(--accent); color: var(--primary); padding: 4px 12px; border-radius: 15px; font-size: 11px; font-weight: bold; margin-bottom: 15px; }}
             .featured-article h2 {{ font-size: 28px; color: var(--primary); margin-bottom: 15px; }}
             .article-meta {{ color: #999; font-size: 12px; margin-bottom: 15px; }}
             .featured-article p {{ line-height: 1.8; margin-bottom: 20px; }}
-            
-            /* News Grid */
             .section-title {{ font-size: 22px; color: var(--primary); border-left: 4px solid var(--accent); padding-left: 15px; margin-bottom: 20px; margin-top: 30px; }}
             .news-grid {{ display: grid; grid-template-columns: repeat(2, 1fr); gap: 25px; margin-bottom: 40px; }}
             .news-item {{ background: white; border-radius: 10px; padding: 20px; transition: transform 0.3s; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }}
             .news-item:hover {{ transform: translateY(-3px); }}
             .news-category {{ display: inline-block; background: var(--primary-light); color: white; padding: 2px 10px; border-radius: 12px; font-size: 10px; margin-bottom: 10px; }}
             .news-item h3 {{ font-size: 18px; margin-bottom: 8px; }}
-            .news-item h3 a:hover {{ text-decoration: underline; }}
             .news-meta {{ color: #999; font-size: 11px; margin-bottom: 12px; }}
-            .news-item p {{ color: #555; font-size: 14px; line-height: 1.5; margin-bottom: 12px; }}
             .read-more {{ color: var(--accent); font-size: 13px; font-weight: bold; text-decoration: none; }}
-            .read-more:hover {{ text-decoration: underline; }}
-            
             .two-column {{ display: grid; grid-template-columns: 2fr 1fr; gap: 30px; margin-bottom: 40px; }}
             .btn {{ display: inline-block; background: var(--primary); color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 15px; font-size: 14px; }}
-            
             .weather-widget {{ background: linear-gradient(135deg, #1e3c72, #2a5298); border-radius: 15px; padding: 20px; color: white; margin-bottom: 30px; }}
             .weather-main {{ text-align: center; }}
             .weather-icon {{ font-size: 48px; }}
@@ -413,28 +302,23 @@ def home():
             .weather-details {{ display: flex; justify-content: space-around; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.2); }}
             .forecast {{ display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.2); }}
             .forecast-day {{ text-align: center; padding: 6px; background: rgba(255,255,255,0.1); border-radius: 8px; font-size: 12px; }}
-            
             .business-grid {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin: 20px 0; }}
             .business-card {{ background: white; border-radius: 10px; padding: 20px; }}
             .business-category {{ display: inline-block; background: var(--accent); color: var(--primary); padding: 2px 8px; border-radius: 15px; font-size: 10px; margin: 8px 0; }}
             .business-contact {{ font-size: 12px; margin-top: 10px; color: #666; }}
-            
             .ad-spot {{ background: linear-gradient(135deg, #fff8e1, #ffe082); border: 2px dashed var(--accent); border-radius: 10px; padding: 20px; text-align: center; margin: 30px 0; }}
             .ad-spot h3 {{ color: var(--primary); margin-bottom: 10px; }}
-            .ad-spot .ad-price {{ font-size: 28px; font-weight: bold; color: var(--accent); }}
-            .ad-spot .btn-ad {{ background: var(--primary); color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin-top: 10px; }}
-            
+            .ad-price {{ font-size: 28px; font-weight: bold; color: var(--accent); }}
+            .btn-ad {{ background: var(--primary); color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin-top: 10px; }}
             .newsletter {{ background: linear-gradient(135deg, var(--primary), #0d260d); color: white; padding: 35px; border-radius: 15px; text-align: center; margin: 40px 0; }}
             .newsletter input {{ padding: 10px; width: 250px; border: none; border-radius: 5px; margin: 8px; }}
             .newsletter select {{ padding: 10px; width: 200px; border: none; border-radius: 5px; margin: 8px; }}
             .newsletter button {{ background: var(--accent); color: var(--primary); padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; }}
-            
             .footer {{ background: #0d260d; color: white; text-align: center; padding: 40px 20px; margin-top: 40px; }}
             .footer-content {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 30px; max-width: 1200px; margin: 0 auto; }}
             .footer-column a {{ color: #ccc; text-decoration: none; display: block; margin-bottom: 8px; font-size: 13px; }}
             .footer-column a:hover {{ color: var(--accent); }}
             .copyright {{ text-align: center; padding-top: 30px; margin-top: 30px; border-top: 1px solid rgba(255,255,255,0.1); font-size: 11px; }}
-            
             @media (max-width: 768px) {{
                 .stats {{ grid-template-columns: repeat(2, 1fr); }}
                 .news-grid {{ grid-template-columns: 1fr; }}
@@ -447,16 +331,8 @@ def home():
     </head>
     <body>
         <div class="top-bar">🌿 Serving Spruce Grove, Stony Plain & Parkland County | "Your Hometown, Online."</div>
-        
-        <div class="header">
-            <div class="logo">
-                <h1>📰 {NEWSPAPER_NAME}</h1>
-                <p>ESTABLISHED {LAUNCH_DATE} | INDEPENDENT & LOCAL</p>
-            </div>
-        </div>
-        
+        <div class="header"><div class="logo"><h1>📰 {NEWSPAPER_NAME}</h1><p>ESTABLISHED {LAUNCH_DATE} | INDEPENDENT & LOCAL</p></div></div>
         <div class="date-header">📍 Spruce Grove, Alberta | {datetime.now().strftime('%A, %B %d, %Y')}</div>
-        
         <div class="nav">
             <a href="/">🏠 HOME</a>
             <a href="/classifieds">📋 CLASSIFIEDS</a>
@@ -465,7 +341,6 @@ def home():
             <a href="/events">📅 EVENTS</a>
             <a href="/support" style="background: #D4A017; color: #1a3d1a; padding: 5px 12px; border-radius: 20px;">🌟 SUPPORT</a>
         </div>
-        
         <div class="hero">
             <h2>Your Hometown, Online.</h2>
             <p>Serving Spruce Grove, Stony Plain & Parkland County</p>
@@ -474,7 +349,6 @@ def home():
                 <button type="submit"><i class="fas fa-search"></i> Search</button>
             </form>
         </div>
-        
         <div class="quick-links">
             <a href="/submit-tip" class="quick-link">📢 News Tip</a>
             <a href="/submit-photo" class="quick-link">📸 Share Photo</a>
@@ -482,16 +356,14 @@ def home():
             <a href="/events" class="quick-link">📅 Events</a>
             <a href="/classifieds" class="quick-link">📋 Buy & Sell</a>
         </div>
-        
         <div class="main-content">
             <div class="stats">
-                <div class="stat-card"><i class="fas fa-newspaper"></i><div class="stat-number">{len(news_articles)}+</div><div>Articles</div></div>
+                <div class="stat-card"><i class="fas fa-newspaper"></i><div class="stat-number">10+</div><div>Articles</div></div>
                 <div class="stat-card"><i class="fas fa-store"></i><div class="stat-number">50+</div><div>Businesses</div></div>
                 <div class="stat-card"><i class="fas fa-users"></i><div class="stat-number">500+</div><div>Subscribers</div></div>
                 <div class="stat-card"><i class="fas fa-calendar"></i><div class="stat-number">10+</div><div>Events</div></div>
             </div>
             
-            <!-- Featured Article -->
             <div class="featured-article">
                 <div class="featured-badge">⭐ FEATURED STORY</div>
                 <h2>{featured['title']}</h2>
@@ -500,37 +372,23 @@ def home():
                 <a href="/article/{featured['id']}" class="btn">Read Full Story →</a>
             </div>
             
-            <!-- More News Grid -->
             <h2 class="section-title">📰 More Local News</h2>
-            <div class="news-grid">
-                {other_articles_html}
-            </div>
+            <div class="news-grid">{other_articles_html}</div>
             
             <div class="two-column">
                 <div>
                     <h2 class="section-title">📅 Upcoming Events</h2>
-                    <div class="feature-card"><ul style="list-style: none;">{events_html}</ul><a href="/events" class="btn">View All Events →</a></div>
-                    
+                    <div class="feature-card" style="background:white;border-radius:10px;padding:25px;margin-bottom:30px"><ul style="list-style: none;">{events_html}</ul><a href="/events" class="btn">View All Events →</a></div>
                     <h2 class="section-title">🏪 Local Businesses</h2>
                     <div class="business-grid">{businesses_html}</div>
                     <div style="text-align: center;"><a href="/business-directory" class="btn">View All →</a></div>
                 </div>
-                
                 <div>
                     <div class="weather-widget">
-                        <div class="weather-main">
-                            <div class="weather-icon">{weather['current']['icon']}</div>
-                            <div class="weather-temp">{weather['current']['temp']}<small>°C</small></div>
-                            <div>{weather['current']['condition']}</div>
-                        </div>
-                        <div class="weather-details">
-                            <div><i class="fas fa-tint"></i><br>{weather['current']['humidity']}%</div>
-                            <div><i class="fas fa-wind"></i><br>{weather['current']['wind']} km/h</div>
-                        </div>
+                        <div class="weather-main"><div class="weather-icon">{weather['current']['icon']}</div><div class="weather-temp">{weather['current']['temp']}<small>°C</small></div><div>{weather['current']['condition']}</div></div>
+                        <div class="weather-details"><div><i class="fas fa-tint"></i><br>{weather['current']['humidity']}%</div><div><i class="fas fa-wind"></i><br>{weather['current']['wind']} km/h</div></div>
                         <div class="forecast">{forecast_html}</div>
                     </div>
-                    
-                    <!-- Advertise with Us Banner -->
                     <div class="ad-spot">
                         <i class="fas fa-bullhorn" style="font-size: 36px; color: var(--primary);"></i>
                         <h3>Advertise With Us</h3>
@@ -562,37 +420,12 @@ def home():
         
         <div class="footer">
             <div class="footer-content">
-                <div class="footer-column">
-                    <h4>📰 The Gazette</h4>
-                    <a href="/">Home</a>
-                    <a href="/classifieds">Classifieds</a>
-                    <a href="/business-directory">Business Directory</a>
-                    <a href="/subscribe">Newsletter</a>
-                </div>
-                <div class="footer-column">
-                    <h4>📬 Connect</h4>
-                    <a href="/submit-tip">News Tip</a>
-                    <a href="/submit-photo">Share Photo</a>
-                    <a href="/advertise">Advertise</a>
-                    <a href="mailto:editor@sprucegrovegazette.com">editor@sprucegrovegazette.com</a>
-                </div>
-                <div class="footer-column">
-                    <h4>🤝 Community</h4>
-                    <a href="/foodbank">Parkland Food Bank</a>
-                    <a href="/support">Become a Supporter</a>
-                    <a href="/events">Community Calendar</a>
-                </div>
-                <div class="footer-column">
-                    <h4>📍 Our Region</h4>
-                    <a href="#">Spruce Grove</a>
-                    <a href="#">Parkland County</a>
-                    <a href="#">Stony Plain</a>
-                </div>
+                <div class="footer-column"><h4>📰 The Gazette</h4><a href="/">Home</a><a href="/classifieds">Classifieds</a><a href="/business-directory">Business Directory</a><a href="/subscribe">Newsletter</a></div>
+                <div class="footer-column"><h4>📬 Connect</h4><a href="/submit-tip">News Tip</a><a href="/submit-photo">Share Photo</a><a href="/advertise">Advertise</a><a href="mailto:editor@sprucegrovegazette.com">editor@sprucegrovegazette.com</a></div>
+                <div class="footer-column"><h4>🤝 Community</h4><a href="/foodbank">Parkland Food Bank</a><a href="/support">Become a Supporter</a><a href="/events">Community Calendar</a></div>
+                <div class="footer-column"><h4>📍 Our Region</h4><a href="#">Spruce Grove</a><a href="#">Parkland County</a><a href="#">Stony Plain</a></div>
             </div>
-            <div class="copyright">
-                <p>© {datetime.now().year} {NEWSPAPER_NAME}. All rights reserved.</p>
-                <p>Serving Spruce Grove, Stony Plain & Parkland County since {LAUNCH_DATE}</p>
-            </div>
+            <div class="copyright"><p>© {datetime.now().year} {NEWSPAPER_NAME}. All rights reserved.</p><p>Serving Spruce Grove, Stony Plain & Parkland County since {LAUNCH_DATE}</p></div>
         </div>
     </body>
     </html>
@@ -637,9 +470,7 @@ def article_page(article_id):
         <div class="nav"><a href="/">Home</a><a href="/classifieds">Classifieds</a><a href="/events">Events</a></div>
         <div class="container">
             <h1 class="article-title">{article['title']}</h1>
-            <div class="article-meta">
-                📅 {article['date']} | Source: {article['source']} | Category: {article['category']}
-            </div>
+            <div class="article-meta">📅 {article['date']} | Source: {article['source']} | Category: {article['category']}</div>
             <div class="article-content">
                 <p>{article['summary']}</p>
                 <p>For more details on this story, please visit the official source or contact the Spruce Grove Gazette newsroom.</p>
@@ -661,43 +492,32 @@ def advertise():
     return '''
     <!DOCTYPE html>
     <html>
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>Advertise With Us - Spruce Grove Gazette</title>
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-        <style>
-            :root { --primary: #1a3d1a; --primary-light: #2C5F2D; --accent: #D4A017; }
-            body { font-family: 'Georgia', serif; background: #f9f9f5; margin: 0; }
-            .header { background: var(--primary); color: white; padding: 40px; text-align: center; }
-            .header h1 { margin: 0; font-size: 42px; }
-            .container { max-width: 1200px; margin: 0 auto; padding: 50px 20px; }
-            .stats-banner { background: white; border-radius: 15px; padding: 30px; text-align: center; margin-bottom: 50px; }
-            .stat-grid { display: flex; justify-content: center; gap: 50px; flex-wrap: wrap; }
-            .stat-number { font-size: 42px; font-weight: bold; color: var(--accent); }
-            .package-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 30px; margin: 50px 0; }
-            .package-card { background: white; border-radius: 15px; padding: 35px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
-            .package-card.featured { border: 2px solid var(--accent); position: relative; }
-            .popular-badge { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: var(--accent); padding: 5px 20px; border-radius: 20px; font-size: 12px; font-weight: bold; }
-            .package-price { font-size: 36px; font-weight: bold; color: var(--accent); margin: 20px 0; }
-            .btn-inquire { background: var(--primary); color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block; margin-top: 20px; }
-            .contact-form { background: white; border-radius: 15px; padding: 40px; margin: 50px 0; }
-            input, select, textarea { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px; }
-            button { background: var(--primary); color: white; padding: 12px 30px; border: none; border-radius: 5px; cursor: pointer; }
-            .footer { background: #0d260d; color: white; text-align: center; padding: 30px; margin-top: 40px; }
-            @media (max-width: 768px) { .package-grid { grid-template-columns: 1fr; } }
-        </style>
+    <head><title>Advertise With Us</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body { font-family: Georgia; background: #f9f9f5; margin: 0; }
+        .header { background: #1a3d1a; color: white; padding: 40px; text-align: center; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 50px 20px; }
+        .stats-banner { background: white; border-radius: 15px; padding: 30px; text-align: center; margin-bottom: 50px; }
+        .stat-grid { display: flex; justify-content: center; gap: 50px; flex-wrap: wrap; }
+        .stat-number { font-size: 42px; font-weight: bold; color: #D4A017; }
+        .package-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 30px; margin: 50px 0; }
+        .package-card { background: white; border-radius: 15px; padding: 35px; text-align: center; }
+        .package-card.featured { border: 2px solid #D4A017; position: relative; }
+        .popular-badge { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: #D4A017; padding: 5px 20px; border-radius: 20px; font-size: 12px; }
+        .package-price { font-size: 36px; font-weight: bold; color: #D4A017; margin: 20px 0; }
+        .btn-inquire { background: #1a3d1a; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block; }
+        .contact-form { background: white; border-radius: 15px; padding: 40px; margin: 50px 0; }
+        input, select, textarea { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px; }
+        button { background: #1a3d1a; color: white; padding: 12px 30px; border: none; border-radius: 5px; cursor: pointer; }
+        .footer { background: #0d260d; color: white; text-align: center; padding: 30px; }
+        @media (max-width: 768px) { .package-grid { grid-template-columns: 1fr; } }
+    </style>
     </head>
     <body>
         <div class="header"><h1>📰 Advertise With The Gazette</h1><p>Reach thousands of local readers</p></div>
         <div class="container">
-            <div class="stats-banner">
-                <div class="stat-grid">
-                    <div><div class="stat-number">10,000+</div>Monthly Readers</div>
-                    <div><div class="stat-number">500+</div>Newsletter Subscribers</div>
-                    <div><div class="stat-number">100%</div>Local Audience</div>
-                </div>
-            </div>
+            <div class="stats-banner"><div class="stat-grid"><div><div class="stat-number">10,000+</div>Monthly Readers</div><div><div class="stat-number">500+</div>Newsletter Subscribers</div><div><div class="stat-number">100%</div>Local Audience</div></div></div>
             <div class="package-grid">
                 <div class="package-card"><h3>Digital Display</h3><div class="package-price">$150<span style="font-size:14px">/month</span></div><p>Banner ad on homepage</p><a href="/inquire?package=display" class="btn-inquire">Get Started →</a></div>
                 <div class="package-card featured"><div class="popular-badge">MOST POPULAR</div><h3>Sponsored Article</h3><div class="package-price">$250<span style="font-size:14px">/article</span></div><p>Professional feature story</p><a href="/inquire?package=sponsored" class="btn-inquire">Get Started →</a></div>
@@ -710,12 +530,7 @@ def advertise():
                     <input type="text" name="contact_name" placeholder="Your Name" required>
                     <input type="email" name="email" placeholder="Email Address" required>
                     <input type="tel" name="phone" placeholder="Phone Number">
-                    <select name="package_interest">
-                        <option value="">I'm interested in...</option>
-                        <option>Digital Display Ad</option>
-                        <option>Sponsored Article</option>
-                        <option>Community Spotlight</option>
-                    </select>
+                    <select name="package_interest"><option value="">I'm interested in...</option><option>Digital Display Ad</option><option>Sponsored Article</option><option>Community Spotlight</option></select>
                     <textarea name="message" rows="4" placeholder="Tell us about your business..."></textarea>
                     <button type="submit">Send Inquiry →</button>
                 </form>
@@ -741,17 +556,12 @@ def inquire():
         return '<html><body style="text-align:center;padding:50px"><h1>✅ Thank You!</h1><p>We will contact you within 24 hours.</p><a href="/">← Back</a></body></html>'
     return redirect('/advertise')
 
-# ============================================
-# SUPPORTER ROUTE
-# ============================================
-
 @app.route('/support')
 def support():
     return '''
     <!DOCTYPE html>
     <html>
     <head><title>Become a Supporter</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         body { font-family: Georgia; background: #f9f9f5; margin: 0; }
         .header { background: #1a3d1a; color: white; padding: 30px; text-align: center; }
@@ -769,24 +579,19 @@ def support():
         <div class="header"><h1>🌟 Support Local Journalism</h1></div>
         <div class="container"><div class="pricing-grid">
             <div class="pricing-card"><h3>Free Reader</h3><div class="price">$0</div><a href="/subscribe" class="btn">Current Plan</a></div>
-            <div class="pricing-card featured"><div class="popular-badge">MOST POPULAR</div><h3>Monthly Supporter</h3><div class="price">$5<span style="font-size:14px">/month</span></div><a href="#" class="btn" onclick="alert(\'Payment coming soon!\')">Become a Supporter</a></div>
-            <div class="pricing-card"><h3>Yearly Supporter</h3><div class="price">$50<span style="font-size:14px">/year</span></div><a href="#" class="btn" onclick="alert(\'Payment coming soon!\')">Join Yearly</a></div>
+            <div class="pricing-card featured"><div class="popular-badge">MOST POPULAR</div><h3>Monthly Supporter</h3><div class="price">$5<span style="font-size:14px">/month</span></div><a href="#" class="btn" onclick="alert('Payment coming soon!')">Become a Supporter</a></div>
+            <div class="pricing-card"><h3>Yearly Supporter</h3><div class="price">$50<span style="font-size:14px">/year</span></div><a href="#" class="btn" onclick="alert('Payment coming soon!')">Join Yearly</a></div>
         </div><p style="text-align:center;margin-top:40px"><a href="/">← Back to Home</a></p></div>
     </body>
     </html>
     '''
-
-# ============================================
-# FOOD BANK ROUTE
-# ============================================
 
 @app.route('/foodbank')
 def foodbank():
     return '''
     <!DOCTYPE html>
     <html>
-    <head><title>Parkland Food Bank - Spruce Grove Gazette</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <head><title>Parkland Food Bank</title>
     <style>
         body { font-family: Georgia; background: #f9f9f5; margin: 0; }
         .header { background: #1a3d1a; color: white; padding: 30px; text-align: center; }
@@ -801,26 +606,21 @@ def foodbank():
         .help-card i { font-size: 48px; color: #e74c3c; }
         .btn-website { background: #1a3d1a; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block; margin-top: 20px; }
         .footer { background: #0d260d; color: white; text-align: center; padding: 30px; margin-top: 40px; }
-        @media (max-width: 768px) { .event-card { flex-direction: column; text-align: center; } .help-grid { grid-template-columns: 1fr; } }
+        @media (max-width: 768px) { .event-card { flex-direction: column; } .help-grid { grid-template-columns: 1fr; } }
     </style>
     </head>
     <body>
         <div class="header"><h1>🥫 Parkland Food Bank</h1><p>Serving Spruce Grove, Stony Plain & Parkland County Since 1984</p></div>
-        <div class="stats-bar">
-            <div><div class="stat-number">40+</div>Years</div>
-            <div><div class="stat-number">5,634</div>Individuals</div>
-            <div><div class="stat-number">31,945</div>Visits</div>
-            <div><div class="stat-number">9,707</div>Hampers/Month</div>
-        </div>
+        <div class="stats-bar"><div><div class="stat-number">40+</div>Years</div><div><div class="stat-number">5,634</div>Individuals</div><div><div class="stat-number">31,945</div>Visits</div><div><div class="stat-number">9,707</div>Hampers/Month</div></div>
         <div class="container">
-            <div class="featured-article"><h2>New $1.2 Million Facility Coming to Spruce Grove</h2><p>Parkland Food Bank has purchased a 2.86-acre property for a new, larger facility. "This is the first step to ensure that as long as there is need, Parkland Food Bank will be here," said Executive Director Sheri Ratsoy.</p></div>
+            <div class="featured-article"><h2>New $1.2 Million Facility Coming to Spruce Grove</h2><p>Parkland Food Bank has purchased a 2.86-acre property for a new, larger facility.</p></div>
             <h2>📅 Upcoming Events</h2>
             <div class="event-card"><div class="event-date"><div>APR</div><div>13-17</div></div><div><h3>Food Fight '26</h3><p>Spruce Grove Composite High School's week-long food drive</p></div></div>
             <div class="event-card"><div class="event-date"><div>AUG</div><div>2026</div></div><div><h3>Corporate Food Drive Challenge</h3><p>Local businesses compete to collect food</p></div></div>
             <div class="help-grid">
-                <div class="help-card"><i class="fas fa-apple-alt"></i><h3>Donate Food</h3><p>105 Madison Crescent, Spruce Grove</p></div>
-                <div class="help-card"><i class="fas fa-dollar-sign"></i><h3>Monetary Donations</h3><p>Visit parklandfoodbank.org</p></div>
-                <div class="help-card"><i class="fas fa-hands-helping"></i><h3>Volunteer</h3><p>Call Sheri Ratsoy: 780-962-4565</p></div>
+                <div class="help-card"><i class="fas fa-apple-alt"></i><h3>Donate Food</h3><p>105 Madison Crescent</p></div>
+                <div class="help-card"><i class="fas fa-dollar-sign"></i><h3>Monetary Donations</h3><p>parklandfoodbank.org</p></div>
+                <div class="help-card"><i class="fas fa-hands-helping"></i><h3>Volunteer</h3><p>Call 780-962-4565</p></div>
             </div>
             <div style="text-align: center;"><a href="https://parklandfoodbank.org" target="_blank" class="btn-website">Visit Parkland Food Bank Website →</a></div>
         </div>
@@ -828,10 +628,6 @@ def foodbank():
     </body>
     </html>
     '''
-
-# ============================================
-# EVENTS ROUTES
-# ============================================
 
 @app.route('/events')
 def events_list():
@@ -841,7 +637,6 @@ def events_list():
     <!DOCTYPE html>
     <html>
     <head><title>Community Events</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>body{{font-family:Georgia;background:#f9f9f5;margin:0}}.header{{background:#1a3d1a;color:white;padding:30px;text-align:center}}.container{{max-width:800px;margin:0 auto;padding:40px 20px}}.btn{{background:#1a3d1a;color:white;padding:10px20px;text-decoration:none;border-radius:5px}}</style>
     </head>
     <body><div class="header"><h1>📅 Community Events Calendar</h1></div><div class="container">{events_html if events_html else '<p>No upcoming events.</p>'}<div style="text-align:center;margin-top:30px"><a href="/events/create" class="btn">+ Create Event</a> <a href="/" class="btn">← Back</a></div></div></body>
@@ -871,10 +666,6 @@ def create_event():
     </html>
     '''
 
-# ============================================
-# CLASSIFIEDS ROUTES
-# ============================================
-
 @app.route('/classifieds')
 def classifieds():
     conn = sqlite3.connect('gazette.db')
@@ -882,14 +673,11 @@ def classifieds():
     cursor.execute("SELECT title, description, price, contact, date FROM classifieds WHERE active = 1 ORDER BY date DESC LIMIT 20")
     classifieds_list = cursor.fetchall()
     conn.close()
-    
     classifieds_html = ''.join([f'<div style="background:white;padding:20px;margin-bottom:15px;border-radius:10px"><h3>{c[0]}</h3><p>{c[1]}</p><div style="color:#D4A017;font-weight:bold">{c[2]}</div><small>Contact: {c[3]} | Posted: {c[4]}</small></div>' for c in classifieds_list])
-    
     return f'''
     <!DOCTYPE html>
     <html>
-    <head><title>Classifieds - Spruce Grove Gazette</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <head><title>Classifieds</title>
     <style>body{{font-family:Georgia;background:#f9f9f5;margin:0}}.header{{background:#1a3d1a;color:white;padding:30px;text-align:center}}.container{{max-width:800px;margin:0 auto;padding:40px20px}}.btn{{background:#1a3d1a;color:white;padding:10px20px;text-decoration:none;border-radius:5px}}</style>
     </head>
     <body><div class="header"><h1>📋 Classifieds</h1><p>Buy & Sell in Spruce Grove</p></div><div class="container">{classifieds_html if classifieds_html else '<p>No classifieds yet.</p>'}<div style="text-align:center;margin-top:30px"><a href="/post-ad" class="btn">📝 Post an Ad</a> <a href="/" class="btn">← Back</a></div></div></body>
@@ -919,10 +707,6 @@ def post_ad():
     <body><div class="container"><h1>📝 Post a Classified Ad</h1><form method="POST"><select name="category"><option>Jobs</option><option>For Sale</option><option>Housing</option><option>Services</option><option>Garage Sale</option></select><input type="text" name="title" placeholder="Ad Title" required><textarea name="description" rows="4" placeholder="Description"></textarea><input type="text" name="price" placeholder="Price"><input type="text" name="contact" placeholder="Contact info"><input type="email" name="email" placeholder="Email"><input type="text" name="phone" placeholder="Phone"><button type="submit">Post Ad →</button></form><a href="/classifieds">← Back</a></div></body>
     </html>
     '''
-
-# ============================================
-# SUBSCRIBE & OTHER ROUTES
-# ============================================
 
 @app.route('/subscribe')
 def subscribe():
@@ -1000,7 +784,6 @@ def business_directory():
     <!DOCTYPE html>
     <html>
     <head><title>Business Directory</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>body{{font-family:Georgia;background:#f9f9f5;margin:0}}.header{{background:#1a3d1a;color:white;padding:30px;text-align:center}}.container{{max-width:1000px;margin:0 auto;padding:40px20px}}.business-grid{{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}}.btn{{background:#1a3d1a;color:white;padding:10px20px;text-decoration:none;border-radius:5px}}@media(max-width:768px){{.business-grid{{grid-template-columns:1fr}}}}</style>
     </head>
     <body><div class="header"><h1>🏪 Local Business Directory</h1><p>Support Spruce Grove & Parkland County Businesses</p></div><div class="container"><div class="business-grid">{businesses_html if businesses_html else '<p>No businesses listed yet.</p>'}</div><div style="text-align:center;margin-top:30px"><a href="/submit-business" class="btn">➕ Add Your Business</a> <a href="/" class="btn">← Back</a></div></div></body>
