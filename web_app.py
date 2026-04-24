@@ -217,7 +217,7 @@ news_articles = [
 ]
 
 # ============================================
-# HOME PAGE
+# HOME PAGE WITH CLASSIFIEDS CATEGORY FILTERS
 # ============================================
 
 @app.route('/')
@@ -229,7 +229,7 @@ def home():
     # Get classifieds from database
     conn = sqlite3.connect('gazette.db')
     cursor = conn.cursor()
-    cursor.execute("SELECT title, description, price, contact, date FROM classifieds WHERE active = 1 ORDER BY date DESC LIMIT 3")
+    cursor.execute("SELECT title, description, price, contact, date, category FROM classifieds WHERE active = 1 ORDER BY date DESC LIMIT 5")
     classifieds_list = cursor.fetchall()
     conn.close()
     
@@ -242,18 +242,19 @@ def home():
     
     businesses_html = ''.join([f'<div class="business-card"><h4>{b["name"]}</h4><div class="business-category">{b["category"]}</div><p>{b["description"][:100]}...</p><div class="business-contact"><i class="fas fa-phone"></i> {b["phone"]}</div></div>' for b in businesses])
     
-    # Classifieds preview HTML
+    # Classifieds preview HTML with category badges
     if classifieds_list:
         classifieds_html = ''.join([f'''
-            <div style="border-bottom: 1px solid #eee; padding: 15px 0;">
+            <div style="border-bottom: 1px solid #eee; padding: 12px 0;">
+                <span class="classified-category-badge" style="display: inline-block; background: var(--accent); color: var(--primary); padding: 2px 8px; border-radius: 12px; font-size: 10px; font-weight: bold; margin-right: 10px;">{c[5].upper() if c[5] else "GENERAL"}</span>
                 <strong>{c[0]}</strong>
-                <p style="margin: 5px 0; color: #666;">{c[1][:100]}...</p>
+                <p style="margin: 5px 0; color: #666; font-size: 13px;">{c[1][:80]}...</p>
                 <div style="color: var(--accent); font-weight: bold;">{c[2] if c[2] else "Price not specified"}</div>
                 <small>Contact: {c[3]} | Posted: {c[4]}</small>
             </div>
         ''' for c in classifieds_list])
     else:
-        classifieds_html = '<p style="color: #666;">No classifieds yet. <a href="/post-ad">Post an ad →</a></p>'
+        classifieds_html = '<p style="color: #666; text-align: center; padding: 20px;">No classifieds yet. <a href="/post-ad">Post an ad →</a></p>'
     
     other_articles_html = ''
     for a in other_articles:
@@ -332,6 +333,7 @@ def home():
             .ad-price {{ font-size: 28px; font-weight: bold; color: var(--accent); }}
             .btn-ad {{ background: var(--primary); color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin-top: 10px; }}
             .classifieds-preview {{ margin-bottom: 15px; }}
+            .filter-chip:hover {{ background: var(--accent) !important; color: var(--primary) !important; }}
             .newsletter {{ background: linear-gradient(135deg, var(--primary), #0d260d); color: white; padding: 35px; border-radius: 15px; text-align: center; margin: 40px 0; }}
             .newsletter input {{ padding: 10px; width: 250px; border: none; border-radius: 5px; margin: 8px; }}
             .newsletter select {{ padding: 10px; width: 200px; border: none; border-radius: 5px; margin: 8px; }}
@@ -399,11 +401,21 @@ def home():
             
             <div class="two-column">
                 <div>
-                    <h2 class="section-title">📋 Recent Classifieds</h2>
+                    <h2 class="section-title">📋 Classifieds</h2>
                     <div class="feature-card" style="background:white;border-radius:10px;padding:25px;margin-bottom:30px">
+                        <div class="category-filters" style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid #eee;">
+                            <a href="/classifieds?category=all" class="filter-chip" style="background: var(--primary); color: white; padding: 6px 14px; border-radius: 20px; text-decoration: none; font-size: 12px;">📋 All</a>
+                            <a href="/classifieds?category=jobs" class="filter-chip" style="background: #f0f0f0; color: #333; padding: 6px 14px; border-radius: 20px; text-decoration: none; font-size: 12px;">💼 Jobs</a>
+                            <a href="/classifieds?category=sale" class="filter-chip" style="background: #f0f0f0; color: #333; padding: 6px 14px; border-radius: 20px; text-decoration: none; font-size: 12px;">🏷️ For Sale</a>
+                            <a href="/classifieds?category=housing" class="filter-chip" style="background: #f0f0f0; color: #333; padding: 6px 14px; border-radius: 20px; text-decoration: none; font-size: 12px;">🏠 Housing</a>
+                            <a href="/classifieds?category=services" class="filter-chip" style="background: #f0f0f0; color: #333; padding: 6px 14px; border-radius: 20px; text-decoration: none; font-size: 12px;">🔧 Services</a>
+                            <a href="/classifieds?category=garage" class="filter-chip" style="background: #f0f0f0; color: #333; padding: 6px 14px; border-radius: 20px; text-decoration: none; font-size: 12px;">🏪 Garage Sales</a>
+                        </div>
                         <div class="classifieds-preview">{classifieds_html}</div>
-                        <a href="/classifieds" class="btn">View All Classifieds →</a>
-                        <a href="/post-ad" class="btn" style="background: var(--accent); color: var(--primary); margin-left: 10px;">📝 Post an Ad →</a>
+                        <div style="margin-top: 15px;">
+                            <a href="/classifieds" class="btn" style="margin-right: 10px;">View All Classifieds →</a>
+                            <a href="/post-ad" class="btn" style="background: var(--accent); color: var(--primary);">📝 Post an Ad →</a>
+                        </div>
                     </div>
                     
                     <h2 class="section-title">📅 Upcoming Events</h2>
@@ -516,7 +528,7 @@ def article_page(article_id):
     '''
 
 # ============================================
-# SUPPORTER PAGE with CUSTOM AMOUNT & PAYPAL
+# SUPPORTER PAGE WITH CUSTOM AMOUNT & PAYPAL
 # ============================================
 
 @app.route('/support')
@@ -651,7 +663,7 @@ def support():
                     <div class="impact-card">
                         <i class="fas fa-mobile-alt"></i>
                         <h3>Free for All</h3>
-                        <p>Keeps the Gazette accessible to every resident of Spruce Grove and Parkland County</p>
+                        <p>Keeps the Gazette accessible to every resident</p>
                     </div>
                 </div>
             </div>
@@ -659,7 +671,6 @@ def support():
             <div style="text-align: center; margin-top: 30px; padding: 20px; background: #e8f5e9; border-radius: 10px;">
                 <i class="fas fa-lock" style="margin-right: 10px;"></i>
                 <strong>Secure payments by PayPal</strong> — Your payment information is encrypted and never stored on our servers.
-                <br><small>All contributions are greatly appreciated and help sustain local journalism.</small>
             </div>
         </div>
         
@@ -669,61 +680,34 @@ def support():
         </div>
         
         <script>
-            // Monthly Subscription ($5/month)
             paypal.Buttons({{
-                style: {{
-                    shape: 'rect',
-                    color: 'gold',
-                    layout: 'vertical',
-                    label: 'subscribe',
-                    height: 40
-                }},
+                style: {{ shape: 'rect', color: 'gold', layout: 'vertical', label: 'subscribe', height: 40 }},
                 createSubscription: function(data, actions) {{
-                    return actions.subscription.create({{
-                        'plan_id': '{MONTHLY_PLAN_ID}',
-                        'application_context': {{
-                            'shipping_preference': 'NO_SHIPPING'
-                        }}
-                    }});
+                    return actions.subscription.create({{ 'plan_id': '{MONTHLY_PLAN_ID}', 'application_context': {{ 'shipping_preference': 'NO_SHIPPING' }} }});
                 }},
                 onApprove: function(data, actions) {{
                     alert('Thank you for subscribing! You are now a Gazette Monthly Supporter.');
                     window.location.href = '/support-thank-you';
                 }},
                 onError: function(err) {{
-                    console.error(err);
-                    alert('Payment failed. Please try again or contact us at editor@sprucegrovegazette.com');
+                    alert('Payment failed. Please try again.');
                 }}
             }}).render('#paypal-monthly');
             
-            // Yearly Subscription ($50/year)
             paypal.Buttons({{
-                style: {{
-                    shape: 'rect',
-                    color: 'gold',
-                    layout: 'vertical',
-                    label: 'subscribe',
-                    height: 40
-                }},
+                style: {{ shape: 'rect', color: 'gold', layout: 'vertical', label: 'subscribe', height: 40 }},
                 createSubscription: function(data, actions) {{
-                    return actions.subscription.create({{
-                        'plan_id': '{YEARLY_PLAN_ID}',
-                        'application_context': {{
-                            'shipping_preference': 'NO_SHIPPING'
-                        }}
-                    }});
+                    return actions.subscription.create({{ 'plan_id': '{YEARLY_PLAN_ID}', 'application_context': {{ 'shipping_preference': 'NO_SHIPPING' }} }});
                 }},
                 onApprove: function(data, actions) {{
                     alert('Thank you for subscribing! You are now a Gazette Yearly Supporter.');
                     window.location.href = '/support-thank-you';
                 }},
                 onError: function(err) {{
-                    console.error(err);
-                    alert('Payment failed. Please try again or contact us at editor@sprucegrovegazette.com');
+                    alert('Payment failed. Please try again.');
                 }}
             }}).render('#paypal-yearly');
             
-            // Custom Amount
             const customInput = document.getElementById('customAmount');
             const displaySpan = document.getElementById('customAmountDisplay');
             let currentCustomMode = 'one-time';
@@ -753,13 +737,11 @@ def support():
                         }},
                         onApprove: function(data, actions) {{
                             return actions.order.capture().then(function(details) {{
-                                alert('Thank you ' + details.payer.name.given_name + '! Your donation of $' + amount.toFixed(2) + ' means the world to us.');
+                                alert('Thank you for your donation!');
                                 window.location.href = '/support-thank-you';
                             }});
                         }},
-                        onError: function(err) {{
-                            alert('Payment failed. Please try again.');
-                        }}
+                        onError: function(err) {{ alert('Payment failed.'); }}
                     }}).render('#customPaypalContainer');
                 }} else {{
                     paypal.Buttons({{
@@ -778,9 +760,7 @@ def support():
                                 window.location.href = '/support-thank-you';
                             }});
                         }},
-                        onError: function(err) {{
-                            alert('Payment failed. Please try again.');
-                        }}
+                        onError: function(err) {{ alert('Payment failed.'); }}
                     }}).render('#customPaypalContainer');
                 }}
                 customPaypalRendered = true;
@@ -789,18 +769,14 @@ def support():
             document.getElementById('oneTimeBtn').addEventListener('click', function() {{
                 currentCustomMode = 'one-time';
                 document.getElementById('oneTimeBtn').style.background = '#D4A017';
-                document.getElementById('oneTimeBtn').style.color = '#1a3d1a';
                 document.getElementById('monthlyCustomBtn').style.background = '#1a3d1a';
-                document.getElementById('monthlyCustomBtn').style.color = 'white';
                 renderCustomPaypalButton();
             }});
             
             document.getElementById('monthlyCustomBtn').addEventListener('click', function() {{
                 currentCustomMode = 'monthly';
                 document.getElementById('monthlyCustomBtn').style.background = '#D4A017';
-                document.getElementById('monthlyCustomBtn').style.color = '#1a3d1a';
                 document.getElementById('oneTimeBtn').style.background = '#1a3d1a';
-                document.getElementById('oneTimeBtn').style.color = 'white';
                 renderCustomPaypalButton();
             }});
             
@@ -820,7 +796,6 @@ def support_thank_you():
         <h1 style="color: #1a3d1a;">🎉 Thank You for Your Support!</h1>
         <p>You are now an official Spruce Grove Gazette Supporter.</p>
         <p>Your contribution helps keep local journalism alive in Spruce Grove and Parkland County.</p>
-        <p>You'll receive a confirmation email shortly.</p>
         <a href="/" style="color: #1a3d1a;">← Back to Gazette</a>
     </body>
     </html>
@@ -1003,19 +978,62 @@ def create_event():
 
 @app.route('/classifieds')
 def classifieds():
+    category = request.args.get('category', 'all')
+    
     conn = sqlite3.connect('gazette.db')
     cursor = conn.cursor()
-    cursor.execute("SELECT title, description, price, contact, date FROM classifieds WHERE active = 1 ORDER BY date DESC LIMIT 20")
+    if category != 'all':
+        cursor.execute("SELECT title, description, price, contact, date, category FROM classifieds WHERE active = 1 AND category = ? ORDER BY date DESC", (category,))
+    else:
+        cursor.execute("SELECT title, description, price, contact, date, category FROM classifieds WHERE active = 1 ORDER BY date DESC")
     classifieds_list = cursor.fetchall()
     conn.close()
-    classifieds_html = ''.join([f'<div style="background:white;padding:20px;margin-bottom:15px;border-radius:10px"><h3>{c[0]}</h3><p>{c[1]}</p><div style="color:#D4A017;font-weight:bold">{c[2]}</div><small>Contact: {c[3]} | Posted: {c[4]}</small></div>' for c in classifieds_list])
+    
+    classifieds_html = ''.join([f'''
+        <div style="background:white;border-radius:10px;padding:20px;margin-bottom:15px;box-shadow:0 2px 5px rgba(0,0,0,0.1)">
+            <span style="display:inline-block;background:#D4A017;color:#1a3d1a;padding:2px 8px;border-radius:12px;font-size:10px;font-weight:bold;margin-right:10px">{c[5].upper() if c[5] else "GENERAL"}</span>
+            <h3>{c[0]}</h3>
+            <p>{c[1]}</p>
+            <div style="color:#D4A017;font-weight:bold">{c[2] if c[2] else "Price not specified"}</div>
+            <small>Contact: {c[3]} | Posted: {c[4]}</small>
+        </div>
+    ''' for c in classifieds_list])
+    
     return f'''
     <!DOCTYPE html>
     <html>
-    <head><title>Classifieds</title>
-    <style>body{{font-family:Georgia;background:#f9f9f5;margin:0}}.header{{background:#1a3d1a;color:white;padding:30px;text-align:center}}.container{{max-width:800px;margin:0 auto;padding:40px20px}}.btn{{background:#1a3d1a;color:white;padding:10px20px;text-decoration:none;border-radius:5px}}</style>
+    <head><title>Classifieds - {NEWSPAPER_NAME}</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {{ font-family: Georgia; background: #f9f9f5; margin: 0; }}
+        .header {{ background: #1a3d1a; color: white; padding: 30px; text-align: center; }}
+        .nav {{ background: #2C5F2D; padding: 12px; text-align: center; }}
+        .nav a {{ color: white; margin: 0 15px; text-decoration: none; }}
+        .container {{ max-width: 800px; margin: 0 auto; padding: 40px 20px; }}
+        .category-filters {{ display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 30px; }}
+        .filter-btn {{ background: white; padding: 8px 20px; border-radius: 25px; text-decoration: none; color: #333; }}
+        .filter-btn.active {{ background: #1a3d1a; color: white; }}
+        .btn {{ background: #1a3d1a; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin-top: 20px; }}
+        .footer {{ background: #0d260d; color: white; text-align: center; padding: 30px; margin-top: 40px; }}
+    </style>
     </head>
-    <body><div class="header"><h1>📋 Classifieds</h1><p>Buy & Sell in Spruce Grove</p></div><div class="container">{classifieds_html if classifieds_html else '<p>No classifieds yet.</p>'}<div style="text-align:center;margin-top:30px"><a href="/post-ad" class="btn">📝 Post an Ad</a> <a href="/" class="btn">← Back</a></div></div></body>
+    <body>
+        <div class="header"><h1>📋 Classifieds</h1><p>Buy & Sell in Spruce Grove</p></div>
+        <div class="nav"><a href="/">🏠 Home</a><a href="/classifieds">📋 Classifieds</a><a href="/post-ad">📝 Post an Ad</a></div>
+        <div class="container">
+            <div class="category-filters">
+                <a href="/classifieds?category=all" class="filter-btn {"active" if category == "all" else ""}">📋 All</a>
+                <a href="/classifieds?category=jobs" class="filter-btn {"active" if category == "jobs" else ""}">💼 Jobs</a>
+                <a href="/classifieds?category=sale" class="filter-btn {"active" if category == "sale" else ""}">🏷️ For Sale</a>
+                <a href="/classifieds?category=housing" class="filter-btn {"active" if category == "housing" else ""}">🏠 Housing</a>
+                <a href="/classifieds?category=services" class="filter-btn {"active" if category == "services" else ""}">🔧 Services</a>
+                <a href="/classifieds?category=garage" class="filter-btn {"active" if category == "garage" else ""}">🏪 Garage Sales</a>
+            </div>
+            {classifieds_html if classifieds_list else '<p style="text-align:center;color:#666">No classifieds found.</p>'}
+            <div style="text-align:center;margin-top:30px"><a href="/post-ad" class="btn">📝 Post an Ad →</a> <a href="/" class="btn">← Back</a></div>
+        </div>
+        <div class="footer"><p>© 2026 {NEWSPAPER_NAME} | "Your Hometown, Online."</p></div>
+    </body>
     </html>
     '''
 
@@ -1157,7 +1175,7 @@ def do_submit_business():
 @app.route('/search')
 def search():
     q = request.args.get('q', '')
-    return f'<html><body style="text-align:center;padding:50px"><h1>🔍 Search Results for: "{q}"</h1><p>Search feature coming soon.</p><a href="/">← Back</a></body></html>'
+    return f'<html><body style="text-align:center;padding:50px"><h1>🔍 Search Results for: "{q}"</h1><p>Search coming soon.</p><a href="/">← Back</a></body></html>'
 
 @app.route('/manifest.json')
 def manifest():
