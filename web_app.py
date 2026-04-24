@@ -1,146 +1,30 @@
 """
-Spruce Grove Gazette - Complete Newspaper Website
-Generates articles on demand when needed
+Spruce Grove Gazette - Simple Working Version
 """
 
 import os
-import sqlite3
-import json
 import requests
 import subprocess
-from datetime import datetime, date
-from flask import Flask, jsonify, request
+from datetime import datetime
+from flask import Flask, jsonify
 
 app = Flask(__name__)
 
 NEWSPAPER_NAME = "The Spruce Grove Gazette"
 LAUNCH_DATE = "April 2026"
 LAUNCH_YEAR = 2026
-DB_PATH = 'gazette_archive.db'
-GA_MEASUREMENT_ID = os.environ.get('GA_MEASUREMENT_ID', 'G-XXXXXXXXXX')
-WEATHER_API_KEY = os.environ.get('WEATHER_API_KEY', '')
 
-# ============================================
-# Database Setup
-# ============================================
+# Store the latest article in memory
+latest_article_html = None
+latest_article_title = "Welcome to the Spruce Grove Gazette"
+latest_article_date = datetime.now().strftime('%B %d, %Y')
 
-def init_database():
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS articles (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            title TEXT,
-            content TEXT,
-            published_date DATE
-        )
-    ''')
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS subscribers (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            email TEXT UNIQUE,
-            subscribed_date DATE
-        )
-    ''')
-    conn.commit()
-    conn.close()
-
-init_database()
-
-# ============================================
-# Article Generation
-# ============================================
-
-def generate_article():
-    """Run the news generation script and save to database"""
-    try:
-        # Run the crew AI script
-        result = subprocess.run(['python', 'news_crew_enhanced.py'], 
-                               capture_output=True, 
-                               text=True, 
-                               timeout=120)
-        
-        # Look for the article in the output
-        output = result.stdout
-        print(f"Generation output: {output[:500]}")
-        
-        # Try to extract article from the output
-        import re
-        article_match = re.search(r'<h2.*?>.*?</h2>.*?<p>.*?</p>', output, re.DOTALL)
-        
-        if article_match:
-            article_content = article_match.group(0)
-            title_match = re.search(r'<h2[^>]*>(.*?)</h2>', article_content)
-            title = title_match.group(1) if title_match else "Spruce Grove Gazette Daily Dispatch"
-            
-            # Save to database
-            conn = sqlite3.connect(DB_PATH)
-            cursor = conn.cursor()
-            cursor.execute('''
-                INSERT INTO articles (title, content, published_date)
-                VALUES (?, ?, ?)
-            ''', (title, article_content, date.today().isoformat()))
-            conn.commit()
-            conn.close()
-            return True
-        return False
-    except Exception as e:
-        print(f"Generation failed: {e}")
-        return False
-
-# ============================================
-# Create Test Article
-# ============================================
-
-def create_test_article():
-    """Create a sample article if none exists"""
-    test_title = "Welcome to the Spruce Grove Gazette"
-    test_content = """
-    <h2>Welcome to the Spruce Grove Gazette!</h2>
-    <p>Spruce Grove, AB — The Spruce Grove Gazette is officially launching, bringing local news to our community.</p>
-    <h3>What We Cover</h3>
-    <p>Our newsroom delivers daily articles on:</p>
-    <ul>
-        <li>Local sports and recreation highlights</li>
-        <li>School board decisions and student achievements</li>
-        <li>New business openings and local entrepreneurs</li>
-        <li>Community events and volunteer spotlights</li>
-        <li>City council updates and development projects</li>
-    </ul>
-    <p>— The Spruce Grove Gazette</p>
-    """
-    
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute('''
-        INSERT INTO articles (title, content, published_date)
-        VALUES (?, ?, ?)
-    ''', (test_title, test_content, date.today().isoformat()))
-    conn.commit()
-    conn.close()
-
-# ============================================
-# Routes
-# ============================================
+def get_weather():
+    return {"temp": 18, "condition": "Partly Cloudy"}
 
 @app.route('/')
 def home():
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute("SELECT COUNT(*) FROM articles")
-    article_count = cursor.fetchone()[0]
-    conn.close()
-    
-    weather = {"temp": 18, "condition": "Partly Cloudy"}
-    if WEATHER_API_KEY:
-        try:
-            url = f"http://api.openweathermap.org/data/2.5/weather?q=Spruce Grove,CA&appid={WEATHER_API_KEY}&units=metric"
-            response = requests.get(url)
-            data = response.json()
-            weather = {"temp": round(data['main']['temp']), "condition": data['weather'][0]['description'].title()}
-        except:
-            pass
-    
+    weather = get_weather()
     return f'''
     <!DOCTYPE html>
     <html>
@@ -162,14 +46,7 @@ def home():
             .hero h2 {{ font-size: 42px; }}
             .btn {{ display: inline-block; background: var(--accent); color: var(--primary); padding: 15px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; margin-top: 20px; }}
             .weather {{ background: white; padding: 20px; border-radius: 10px; text-align: center; margin-bottom: 30px; }}
-            .stats {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 40px; }}
-            .stat-card {{ background: white; padding: 30px; text-align: center; border-radius: 10px; }}
-            .stat-number {{ font-size: 48px; font-weight: bold; color: var(--primary); }}
             .footer {{ background: #0d260d; color: white; text-align: center; padding: 30px; margin-top: 40px; }}
-            @media (max-width: 768px) {{
-                .stats {{ grid-template-columns: 1fr; }}
-                .hero h2 {{ font-size: 28px; }}
-            }}
         </style>
     </head>
     <body>
@@ -179,7 +56,7 @@ def home():
         <div class="nav">
             <a href="/">HOME</a>
             <a href="/latest">LATEST DISPATCH</a>
-            <a href="/subscribe">NEWSLETTER</a>
+            <a href="/run-bot">RUN BOT NOW</a>
         </div>
         <div class="main">
             <div class="hero">
@@ -192,11 +69,6 @@ def home():
                 <div style="font-size: 48px; font-weight: bold;">{weather['temp']}°C</div>
                 <div>{weather['condition']}</div>
             </div>
-            <div class="stats">
-                <div class="stat-card"><div class="stat-number">{article_count}</div><div>Dispatches</div></div>
-                <div class="stat-card"><div class="stat-number">5</div><div>Categories</div></div>
-                <div class="stat-card"><div class="stat-number">5 AM</div><div>Daily Delivery</div></div>
-            </div>
         </div>
         <div class="footer">
             <p>📍 Spruce Grove, Alberta</p>
@@ -208,20 +80,15 @@ def home():
 
 @app.route('/latest')
 def latest():
-    """Get latest article or trigger generation"""
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute("SELECT title, content, published_date FROM articles ORDER BY id DESC LIMIT 1")
-    result = cursor.fetchone()
-    conn.close()
+    """Display the latest article"""
+    global latest_article_html, latest_article_title, latest_article_date
     
-    if result:
-        title, content, date_pub = result
+    if latest_article_html:
         return f'''
         <!DOCTYPE html>
         <html>
         <head>
-            <title>{title} - {NEWSPAPER_NAME}</title>
+            <title>{latest_article_title} - {NEWSPAPER_NAME}</title>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1">
             <style>
@@ -231,85 +98,137 @@ def latest():
                 h3 {{ color: #4A7C4B; }}
                 .meta {{ color: #666; border-bottom: 1px solid #ddd; padding-bottom: 10px; margin-bottom: 20px; }}
                 .footer {{ margin-top: 40px; text-align: center; }}
-                .btn {{ display: inline-block; background: #1a3d1a; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; }}
+                .btn {{ display: inline-block; background: #1a3d1a; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 20px; }}
             </style>
         </head>
         <body>
             <h1>📰 {NEWSPAPER_NAME}</h1>
-            <div class="meta">📍 Spruce Grove, AB | 📅 {date_pub}</div>
-            {content}
+            <div class="meta">📍 Spruce Grove, AB | 📅 {latest_article_date}</div>
+            {latest_article_html}
             <div class="footer">
                 <a href="/" class="btn">← Back to Home</a>
+                <a href="/run-bot" class="btn" style="background: #D4A017; color: #1a3d1a;">↻ Generate New Article</a>
             </div>
         </body>
         </html>
         '''
     
-    # No article exists - create test article
-    create_test_article()
-    
     return '''
     <!DOCTYPE html>
     <html>
-    <head>
-        <title>First Dispatch Being Created</title>
-        <meta http-equiv="refresh" content="3; url=/latest">
-    </head>
+    <head><title>No Article Yet</title></head>
     <body style="font-family: Georgia; text-align: center; padding: 50px;">
-        <h1 style="color: #1a3d1a;">📰 Creating First Dispatch...</h1>
-        <p>Please wait. Redirecting in 3 seconds...</p>
-    </body>
-    </html>
-    '''
-
-@app.route('/force-generate')
-def force_generate():
-    """Force generate a new article using the AI crew"""
-    import threading
-    
-    def generate():
-        generate_article()
-    
-    thread = threading.Thread(target=generate)
-    thread.start()
-    
-    return jsonify({"status": "started", "message": "Article generation started. Check /latest in 30 seconds."})
-
-@app.route('/create-test-article')
-def create_test_article_route():
-    """Create a test article"""
-    create_test_article()
-    return jsonify({"status": "success", "message": "Test article created! Visit /latest"})
-
-@app.route('/subscribe')
-def subscribe():
-    return '''
-    <!DOCTYPE html>
-    <html>
-    <head><title>Subscribe</title></head>
-    <body style="font-family: Georgia; text-align: center; padding: 50px;">
-        <h1>📧 Subscribe to The Gazette</h1>
-        <form method="POST" action="/do-subscribe">
-            <input type="email" name="email" placeholder="Your email" required style="padding: 10px; width: 250px;">
-            <button type="submit" style="background: #1a3d1a; color: white; padding: 10px 20px;">Subscribe</button>
-        </form>
+        <h1>📰 No Article Generated Yet</h1>
+        <p>Click the button below to generate the first dispatch.</p>
+        <a href="/run-bot" style="background: #1a3d1a; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; display: inline-block; margin-top: 20px;">🤖 Generate First Dispatch →</a>
         <p><a href="/">← Back to Home</a></p>
     </body>
     </html>
     '''
 
-@app.route('/do-subscribe', methods=['POST'])
-def do_subscribe():
-    email = request.form.get('email')
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
+@app.route('/run-bot')
+def run_bot():
+    """Run the news generation bot"""
+    import subprocess
+    import re
+    
     try:
-        cursor.execute("INSERT INTO subscribers (email, subscribed_date) VALUES (?, ?)", (email, date.today().isoformat()))
-        conn.commit()
-    except:
-        pass
-    conn.close()
-    return '<html><body style="text-align:center;padding:50px;"><h1>✅ Subscribed!</h1><a href="/">Back to Home</a></body></html>'
+        # Run the news generation script
+        result = subprocess.run(['python', 'news_crew_enhanced.py'], 
+                               capture_output=True, 
+                               text=True, 
+                               timeout=120)
+        
+        output = result.stdout
+        
+        # Extract the article HTML from the output
+        article_match = re.search(r'<h2[^>]*>.*?</h2>.*?<p>.*?</p>.*?<p>.*?</p>', output, re.DOTALL)
+        
+        if article_match:
+            global latest_article_html, latest_article_title, latest_article_date
+            latest_article_html = article_match.group(0)
+            
+            # Extract title
+            title_match = re.search(r'<h2[^>]*>(.*?)</h2>', latest_article_html)
+            if title_match:
+                latest_article_title = title_match.group(1)
+            
+            latest_article_date = datetime.now().strftime('%B %d, %Y')
+            
+            return f'''
+            <!DOCTYPE html>
+            <html>
+            <head><title>Article Generated</title></head>
+            <body style="font-family: Georgia; text-align: center; padding: 50px;">
+                <h1 style="color: #1a3d1a;">✅ Article Generated Successfully!</h1>
+                <p>The latest dispatch has been created.</p>
+                <a href="/latest" style="background: #1a3d1a; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; display: inline-block; margin-top: 20px;">📰 Read Latest Dispatch →</a>
+                <p><a href="/">← Back to Home</a></p>
+            </body>
+            </html>
+            '''
+        
+        return f'''
+        <!DOCTYPE html>
+        <html>
+        <head><title>Generation Issue</title></head>
+        <body style="font-family: Georgia; text-align: center; padding: 50px;">
+            <h1>⚠️ Issue Generating Article</h1>
+            <p>The bot ran but didn't produce expected output. Check logs.</p>
+            <pre style="text-align: left; background: #f0f0f0; padding: 20px; overflow: auto;">{output[:500]}</pre>
+            <a href="/">← Back to Home</a>
+        </body>
+        </html>
+        '''
+        
+    except Exception as e:
+        return f'''
+        <!DOCTYPE html>
+        <html>
+        <head><title>Error</title></head>
+        <body style="font-family: Georgia; text-align: center; padding: 50px;">
+            <h1>❌ Error Running Bot</h1>
+            <p>{str(e)}</p>
+            <a href="/">← Back to Home</a>
+        </body>
+        </html>
+        '''
+
+@app.route('/create-test-article')
+def create_test_article():
+    """Create a simple test article without running the full bot"""
+    global latest_article_html, latest_article_title, latest_article_date
+    
+    latest_article_title = "Spruce Grove Gazette - Test Edition"
+    latest_article_date = datetime.now().strftime('%B %d, %Y')
+    latest_article_html = """
+    <h2>Welcome to the Spruce Grove Gazette!</h2>
+    <p>Spruce Grove, AB — The Spruce Grove Gazette is officially launching today, bringing AI-powered local news to our community.</p>
+    <h3>What We Cover</h3>
+    <p>Our newsroom will deliver daily articles on:</p>
+    <ul>
+        <li>Local sports and recreation highlights</li>
+        <li>School board decisions and student achievements</li>
+        <li>New business openings and local entrepreneurs</li>
+        <li>Community events and volunteer spotlights</li>
+        <li>City council updates and development projects</li>
+    </ul>
+    <h3>Coming Soon</h3>
+    <p>The first full AI-generated dispatch will appear here shortly. Our team is working to bring you the best local coverage.</p>
+    <p>— The Spruce Grove Gazette</p>
+    """
+    
+    return '''
+    <!DOCTYPE html>
+    <html>
+    <head><title>Test Article Created</title></head>
+    <body style="font-family: Georgia; text-align: center; padding: 50px;">
+        <h1 style="color: #1a3d1a;">✅ Test Article Created!</h1>
+        <p>A test article has been created. Visit <a href="/latest">/latest</a> to see it.</p>
+        <a href="/latest">View Latest Dispatch →</a>
+    </body>
+    </html>
+    '''
 
 @app.route('/health')
 def health():
@@ -318,13 +237,7 @@ def health():
 @app.route('/debug-files')
 def debug_files():
     import glob
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute("SELECT COUNT(*) FROM articles")
-    count = cursor.fetchone()[0]
-    conn.close()
     return jsonify({
-        "articles_in_db": count,
         "files": glob.glob('*'),
         "current_directory": os.getcwd()
     })
