@@ -44,7 +44,8 @@ def init_database():
             tier TEXT,
             amount INTEGER,
             start_date DATE,
-            active BOOLEAN DEFAULT 1
+            active BOOLEAN DEFAULT 1,
+            paypal_subscription_id TEXT
         )
     ''')
     
@@ -484,152 +485,265 @@ def article_page(article_id):
     '''
 
 # ============================================
-# ADVERTISING ROUTES# ============================================
+# SUPPORTER PAGE with PAYPAL
+# ============================================
+
+@app.route('/support')
+def support():
+    # Update these with your actual PayPal plan IDs after creating them
+    MONTHLY_PLAN_ID = "P-5XXXXXXXXXXXXXX"  # Replace with your monthly plan ID
+    YEARLY_PLAN_ID = "P-5XXXXXXXXXXXXXX"   # Replace with your yearly plan ID
+    
+    return f'''
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Become a Supporter - Spruce Grove Gazette</title>
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+        <style>
+            :root {{ --primary: #1a3d1a; --primary-light: #2C5F2D; --accent: #D4A017; }}
+            body {{ font-family: 'Georgia', serif; background: #f9f9f5; margin: 0; }}
+            .header {{ background: var(--primary); color: white; padding: 40px; text-align: center; }}
+            .header h1 {{ margin: 0; font-size: 42px; }}
+            .header p {{ font-size: 18px; margin-top: 10px; opacity: 0.9; }}
+            .container {{ max-width: 1200px; margin: 0 auto; padding: 50px 20px; }}
+            .pricing-grid {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 30px; margin: 50px 0; }}
+            .pricing-card {{ background: white; border-radius: 15px; padding: 35px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.1); transition: transform 0.3s; }}
+            .pricing-card:hover {{ transform: translateY(-5px); }}
+            .pricing-card.featured {{ border: 2px solid var(--accent); position: relative; }}
+            .popular-badge {{ position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: var(--accent); color: var(--primary); padding: 5px 20px; border-radius: 20px; font-size: 12px; font-weight: bold; }}
+            .price {{ font-size: 48px; font-weight: bold; color: var(--primary); margin: 20px 0; }}
+            .price small {{ font-size: 16px; font-weight: normal; color: #666; }}
+            .features {{ list-style: none; text-align: left; margin: 25px 0; }}
+            .features li {{ padding: 8px 0; border-bottom: 1px solid #eee; }}
+            .features i {{ color: #27ae60; margin-right: 10px; width: 20px; }}
+            .btn {{ display: inline-block; background: var(--primary); color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin-top: 20px; font-weight: bold; cursor: pointer; border: none; }}
+            .btn:hover {{ background: #0d260d; }}
+            .paypal-container {{ margin-top: 20px; min-height: 120px; }}
+            .impact-section {{ background: white; border-radius: 15px; padding: 40px; text-align: center; margin-top: 50px; }}
+            .impact-grid {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 30px; margin-top: 30px; }}
+            .impact-card {{ text-align: center; padding: 20px; }}
+            .impact-card i {{ font-size: 48px; color: var(--accent); margin-bottom: 15px; }}
+            .footer {{ background: #0d260d; color: white; text-align: center; padding: 30px; margin-top: 40px; }}
+            @media (max-width: 768px) {{ .pricing-grid {{ grid-template-columns: 1fr; }} .impact-grid {{ grid-template-columns: 1fr; }} }}
+        </style>
+        <script src="https://www.paypal.com/sdk/js?client-id=AU6T1_qn4WZfpWJkCsMEgEUMrhfsA8oKffBsEaJDfPFNSy4FbW3LzWv3BmP8FhQkDjNq0hXKxYzAbCdE&currency=CAD&vault=true&intent=subscription"></script>
+    </head>
+    <body>
+        <div class="header">
+            <h1>🌟 Support Local Journalism</h1>
+            <p>Help keep Spruce Grove & Parkland County informed and connected</p>
+        </div>
+        
+        <div class="container">
+            <div class="pricing-grid">
+                <div class="pricing-card">
+                    <h3>Free Reader</h3>
+                    <div class="price">$0</div>
+                    <ul class="features">
+                        <li><i class="fas fa-check"></i> Daily newsletter</li>
+                        <li><i class="fas fa-check"></i> Access to all articles</li>
+                        <li><i class="fas fa-check"></i> Community calendar</li>
+                        <li><i class="fas fa-check"></i> Business directory access</li>
+                        <li><i class="fas fa-check"></i> Event listings</li>
+                    </ul>
+                    <a href="/subscribe" class="btn">Current Plan →</a>
+                </div>
+                
+                <div class="pricing-card featured">
+                    <div class="popular-badge">⭐ MOST POPULAR</div>
+                    <h3>Monthly Supporter</h3>
+                    <div class="price">$5<span><small>/month</small></span></div>
+                    <ul class="features">
+                        <li><i class="fas fa-check"></i> All free features</li>
+                        <li><i class="fas fa-check"></i> Supporter badge on comments</li>
+                        <li><i class="fas fa-check"></i> Weekly exclusive content</li>
+                        <li><i class="fas fa-check"></i> Behind-the-scenes updates</li>
+                        <li><i class="fas fa-check"></i> Early access to events</li>
+                        <li><i class="fas fa-check"></i> Reader appreciation shoutout</li>
+                    </ul>
+                    <div class="paypal-container" id="paypal-monthly"></div>
+                </div>
+                
+                <div class="pricing-card">
+                    <h3>Yearly Supporter</h3>
+                    <div class="price">$50<span><small>/year</small></span></div>
+                    <div style="font-size: 14px; color: #666; margin-top: -15px;">Save $10 compared to monthly</div>
+                    <ul class="features">
+                        <li><i class="fas fa-check"></i> All monthly supporter benefits</li>
+                        <li><i class="fas fa-check"></i> Name in annual supporter roll</li>
+                        <li><i class="fas fa-check"></i> Exclusive Gazette merch discount</li>
+                        <li><i class="fas fa-check"></i> Invitation to annual supporter event</li>
+                        <li><i class="fas fa-check"></i> Direct input on coverage priorities</li>
+                    </ul>
+                    <div class="paypal-container" id="paypal-yearly"></div>
+                </div>
+            </div>
+            
+            <div class="impact-section">
+                <h2>Your Support Makes a Difference</h2>
+                <div class="impact-grid">
+                    <div class="impact-card">
+                        <i class="fas fa-newspaper"></i>
+                        <h3>Local Coverage</h3>
+                        <p>Funds our coverage of council meetings, school boards, and community events</p>
+                    </div>
+                    <div class="impact-card">
+                        <i class="fas fa-camera"></i>
+                        <h3>Community Photos</h3>
+                        <p>Supports our photo gallery and community submission platform</p>
+                    </div>
+                    <div class="impact-card">
+                        <i class="fas fa-mobile-alt"></i>
+                        <h3>Free for All</h3>
+                        <p>Keeps the Gazette accessible to every resident of Spruce Grove and Parkland County</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div style="text-align: center; margin-top: 30px; padding: 20px; background: #e8f5e9; border-radius: 10px;">
+                <i class="fas fa-lock" style="margin-right: 10px;"></i>
+                <strong>Secure payments by PayPal</strong> — Your payment information is encrypted and never stored on our servers.
+                <br><small>You can cancel your subscription anytime from your PayPal account.</small>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p><a href="/" style="color: white;">← Back to Home</a></p>
+            <p>© 2026 The Spruce Grove Gazette | Serving Spruce Grove & Parkland County</p>
+        </div>
+        
+        <script>
+            // Monthly Subscription ($5/month)
+            paypal.Buttons({{
+                style: {{
+                    shape: 'rect',
+                    color: 'gold',
+                    layout: 'vertical',
+                    label: 'subscribe',
+                    height: 40
+                }},
+                createSubscription: function(data, actions) {{
+                    return actions.subscription.create({{
+                        'plan_id': '{MONTHLY_PLAN_ID}',
+                        'application_context': {{
+                            'shipping_preference': 'NO_SHIPPING'
+                        }}
+                    }});
+                }},
+                onApprove: function(data, actions) {{
+                    alert('Thank you for subscribing! You are now a Gazette Monthly Supporter.');
+                    window.location.href = '/support-thank-you';
+                }},
+                onError: function(err) {{
+                    console.error(err);
+                    alert('Payment failed. Please try again or contact us at editor@sprucegrovegazette.com');
+                }}
+            }}).render('#paypal-monthly');
+            
+            // Yearly Subscription ($50/year)
+            paypal.Buttons({{
+                style: {{
+                    shape: 'rect',
+                    color: 'gold',
+                    layout: 'vertical',
+                    label: 'subscribe',
+                    height: 40
+                }},
+                createSubscription: function(data, actions) {{
+                    return actions.subscription.create({{
+                        'plan_id': '{YEARLY_PLAN_ID}',
+                        'application_context': {{
+                            'shipping_preference': 'NO_SHIPPING'
+                        }}
+                    }});
+                }},
+                onApprove: function(data, actions) {{
+                    alert('Thank you for subscribing! You are now a Gazette Yearly Supporter.');
+                    window.location.href = '/support-thank-you';
+                }},
+                onError: function(err) {{
+                    console.error(err);
+                    alert('Payment failed. Please try again or contact us at editor@sprucegrovegazette.com');
+                }}
+            }}).render('#paypal-yearly');
+        </script>
+    </body>
+    </html>
+    '''
+
+@app.route('/support-thank-you')
+def support_thank_you():
+    return '''
+    <!DOCTYPE html>
+    <html>
+    <head><title>Thank You!</title></head>
+    <body style="font-family: Georgia; text-align: center; padding: 50px; background: #f9f9f5;">
+        <h1 style="color: #1a3d1a;">🎉 Thank You for Your Support!</h1>
+        <p>You are now an official Spruce Grove Gazette Supporter.</p>
+        <p>Your contribution helps keep local journalism alive in Spruce Grove and Parkland County.</p>
+        <p>You'll receive a confirmation email shortly.</p>
+        <a href="/" style="color: #1a3d1a;">← Back to Gazette</a>
+    </body>
+    </html>
+    '''
+
+# ============================================
+# ADVERTISING ROUTES
+# ============================================
 
 @app.route('/advertise')
 def advertise():
     return '''
     <!DOCTYPE html>
     <html>
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>Advertise With Us - Spruce Grove Gazette</title>
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-        <style>
-            :root { --primary: #1a3d1a; --primary-light: #2C5F2D; --accent: #D4A017; }
-            body { font-family: 'Georgia', serif; background: #f9f9f5; margin: 0; }
-            .header { background: var(--primary); color: white; padding: 40px; text-align: center; }
-            .header h1 { margin: 0; font-size: 42px; }
-            .header p { font-size: 18px; margin-top: 10px; opacity: 0.9; }
-            .container { max-width: 1200px; margin: 0 auto; padding: 50px 20px; }
-            .stats-banner { background: white; border-radius: 15px; padding: 30px; text-align: center; margin-bottom: 50px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
-            .stat-grid { display: flex; justify-content: center; gap: 50px; flex-wrap: wrap; }
-            .stat-number { font-size: 42px; font-weight: bold; color: var(--accent); }
-            .package-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 30px; margin: 50px 0; }
-            .package-card { background: white; border-radius: 15px; padding: 35px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.1); transition: transform 0.3s; }
-            .package-card:hover { transform: translateY(-5px); }
-            .package-card.featured { border: 2px solid var(--accent); position: relative; }
-            .popular-badge { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: var(--accent); color: var(--primary); padding: 5px 20px; border-radius: 20px; font-size: 12px; font-weight: bold; }
-            .package-icon { font-size: 48px; color: var(--primary); margin-bottom: 20px; }
-            .package-name { font-size: 24px; font-weight: bold; color: var(--primary); margin-bottom: 15px; }
-            .package-price { font-size: 36px; font-weight: bold; color: var(--accent); margin: 20px 0; }
-            .package-price small { font-size: 14px; font-weight: normal; color: #666; }
-            .package-features { list-style: none; text-align: left; margin: 25px 0; }
-            .package-features li { padding: 8px 0; border-bottom: 1px solid #eee; }
-            .package-features i { color: #27ae60; margin-right: 10px; width: 20px; }
-            .btn-inquire { display: inline-block; background: var(--primary); color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; margin-top: 20px; transition: background 0.3s; }
-            .btn-inquire:hover { background: #0d260d; }
-            .testimonials { background: white; border-radius: 15px; padding: 40px; margin: 50px 0; text-align: center; }
-            .testimonial-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 30px; margin-top: 30px; }
-            .testimonial-card { background: #f9f9f5; padding: 25px; border-radius: 10px; text-align: left; }
-            .testimonial-text { font-style: italic; margin-bottom: 15px; }
-            .testimonial-author { font-weight: bold; color: var(--primary); }
-            .faq-section { background: white; border-radius: 15px; padding: 40px; margin: 50px 0; }
-            .faq-item { margin-bottom: 20px; }
-            .faq-question { font-weight: bold; color: var(--primary); margin-bottom: 8px; }
-            .contact-form { background: white; border-radius: 15px; padding: 40px; margin: 50px 0; }
-            .contact-form h3 { text-align: center; margin-bottom: 30px; }
-            .form-group { margin-bottom: 20px; }
-            input, select, textarea { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 5px; font-family: inherit; }
-            button { background: var(--primary); color: white; padding: 12px 30px; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; font-weight: bold; }
-            .footer { background: #0d260d; color: white; text-align: center; padding: 30px; margin-top: 40px; }
-            @media (max-width: 768px) { .package-grid { grid-template-columns: 1fr; } .testimonial-grid { grid-template-columns: 1fr; } }
-        </style>
+    <head><title>Advertise With Us</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body { font-family: Georgia; background: #f9f9f5; margin: 0; }
+        .header { background: #1a3d1a; color: white; padding: 40px; text-align: center; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 50px 20px; }
+        .stats-banner { background: white; border-radius: 15px; padding: 30px; text-align: center; margin-bottom: 50px; }
+        .stat-grid { display: flex; justify-content: center; gap: 50px; flex-wrap: wrap; }
+        .stat-number { font-size: 42px; font-weight: bold; color: #D4A017; }
+        .package-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 30px; margin: 50px 0; }
+        .package-card { background: white; border-radius: 15px; padding: 35px; text-align: center; }
+        .package-card.featured { border: 2px solid #D4A017; position: relative; }
+        .popular-badge { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: #D4A017; padding: 5px 20px; border-radius: 20px; font-size: 12px; }
+        .package-price { font-size: 36px; font-weight: bold; color: #D4A017; margin: 20px 0; }
+        .btn-inquire { background: #1a3d1a; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block; }
+        .contact-form { background: white; border-radius: 15px; padding: 40px; margin: 50px 0; }
+        input, select, textarea { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px; }
+        button { background: #1a3d1a; color: white; padding: 12px 30px; border: none; border-radius: 5px; cursor: pointer; }
+        .footer { background: #0d260d; color: white; text-align: center; padding: 30px; }
+        @media (max-width: 768px) { .package-grid { grid-template-columns: 1fr; } }
+    </style>
     </head>
     <body>
-        <div class="header">
-            <h1>📰 Advertise With The Gazette</h1>
-            <p>Reach thousands of engaged local readers in Spruce Grove and Parkland County</p>
-        </div>
-        
+        <div class="header"><h1>📰 Advertise With The Gazette</h1><p>Reach thousands of local readers</p></div>
         <div class="container">
-            <div class="stats-banner">
-                <div class="stat-grid">
-                    <div><div class="stat-number">10,000+</div>Monthly Readers</div>
-                    <div><div class="stat-number">500+</div>Newsletter Subscribers</div>
-                    <div><div class="stat-number">100%</div>Local Audience</div>
-                    <div><div class="stat-number">85%</div>Open Rate</div>
-                </div>
-            </div>
-            
+            <div class="stats-banner"><div class="stat-grid"><div><div class="stat-number">10,000+</div>Monthly Readers</div><div><div class="stat-number">500+</div>Newsletter Subscribers</div><div><div class="stat-number">100%</div>Local Audience</div></div></div>
             <div class="package-grid">
-                <div class="package-card">
-                    <div class="package-icon"><i class="fas fa-bullhorn"></i></div>
-                    <div class="package-name">Digital Display</div>
-                    <div class="package-price">$150<span><small>/month</small></span></div>
-                    <ul class="package-features">
-                        <li><i class="fas fa-check"></i> Banner ad on homepage</li>
-                        <li><i class="fas fa-check"></i> 25,000+ monthly impressions</li>
-                        <li><i class="fas fa-check"></i> Mobile & desktop optimized</li>
-                        <li><i class="fas fa-check"></i> Monthly performance report</li>
-                    </ul>
-                    <a href="/inquire?package=display" class="btn-inquire">Get Started →</a>
-                </div>
-                
-                <div class="package-card featured">
-                    <div class="popular-badge">MOST POPULAR</div>
-                    <div class="package-icon"><i class="fas fa-pen-fancy"></i></div>
-                    <div class="package-name">Sponsored Article</div>
-                    <div class="package-price">$250<span><small>/article</small></span></div>
-                    <ul class="package-features">
-                        <li><i class="fas fa-check"></i> Professionally written feature</li>
-                        <li><i class="fas fa-check"></i> Social media promotion</li>
-                        <li><i class="fas fa-check"></i> Featured in newsletter</li>
-                        <li><i class="fas fa-check"></i> Permanent archive placement</li>
-                    </ul>
-                    <a href="/inquire?package=sponsored" class="btn-inquire">Get Started →</a>
-                </div>
-                
-                <div class="package-card">
-                    <div class="package-icon"><i class="fas fa-star"></i></div>
-                    <div class="package-name">Community Spotlight</div>
-                    <div class="package-price">$400<span><small>/month</small></span></div>
-                    <ul class="package-features">
-                        <li><i class="fas fa-check"></i> Weekly featured business</li>
-                        <li><i class="fas fa-check"></i> Social media takeover</li>
-                        <li><i class="fas fa-check"></i> Email feature to subscribers</li>
-                        <li><i class="fas fa-check"></i> Logo placement on homepage</li>
-                    </ul>
-                    <a href="/inquire?package=spotlight" class="btn-inquire">Get Started →</a>
-                </div>
+                <div class="package-card"><h3>Digital Display</h3><div class="package-price">$150<span style="font-size:14px">/month</span></div><p>Banner ad on homepage</p><a href="/inquire?package=display" class="btn-inquire">Get Started →</a></div>
+                <div class="package-card featured"><div class="popular-badge">MOST POPULAR</div><h3>Sponsored Article</h3><div class="package-price">$250<span style="font-size:14px">/article</span></div><p>Professional feature story</p><a href="/inquire?package=sponsored" class="btn-inquire">Get Started →</a></div>
+                <div class="package-card"><h3>Community Spotlight</h3><div class="package-price">$400<span style="font-size:14px">/month</span></div><p>Weekly business feature</p><a href="/inquire?package=spotlight" class="btn-inquire">Get Started →</a></div>
             </div>
-            
-            <div class="testimonials">
-                <h2>What Our Advertisers Say</h2>
-                <div class="testimonial-grid">
-                    <div class="testimonial-card">
-                        <div class="testimonial-text">"The Spruce Grove Gazette helped us reach new customers we couldn't find elsewhere. Our sponsored article brought in over 20 new clients!"</div>
-                        <div class="testimonial-author">— Main Street Coffee, Spruce Grove</div>
-                    </div>
-                    <div class="testimonial-card">
-                        <div class="testimonial-text">"Best local advertising investment we've made. The community engagement and response has been outstanding."</div>
-                        <div class="testimonial-author">— Spruce Grove Home Hardware</div>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="faq-section">
-                <h2 style="text-align: center;">Frequently Asked Questions</h2>
-                <div class="faq-item">
-                    <div class="faq-question">❓ How long does it take to get started?</div>
-                    <div class="faq-answer">Most campaigns launch within 2-3 business days after signing up.</div>
-                </div>
-                <div class="faq-item">
-                    <div class="faq-question">❓ Can I see analytics for my ad?</div>
-                    <div class="faq-answer">Yes! We provide monthly performance reports including impressions, clicks, and engagement metrics.</div>
-                </div>
-                <div class="faq-item">
-                    <div class="faq-question">❓ Do you offer custom packages?</div>
-                    <div class="faq-answer">Absolutely! Contact us for a customized advertising solution tailored to your business needs.</div>
-                </div>
+            <div class="contact-form">
+                <h3>Request a Media Kit</h3>
+                <form action="/inquire" method="POST">
+                    <input type="text" name="business_name" placeholder="Business Name" required>
+                    <input type="text" name="contact_name" placeholder="Your Name" required>
+                    <input type="email" name="email" placeholder="Email Address" required>
+                    <input type="tel" name="phone" placeholder="Phone Number">
+                    <select name="package_interest"><option value="">I'm interested in...</option><option>Digital Display Ad</option><option>Sponsored Article</option><option>Community Spotlight</option></select>
+                    <textarea name="message" rows="4" placeholder="Tell us about your business..."></textarea>
+                    <button type="submit">Send Inquiry →</button>
+                </form>
             </div>
         </div>
-        
-        <div class="footer">
-            <p><a href="/" style="color: white;">← Back to Home</a></p>
-            <p>© {datetime.now().year} {NEWSPAPER_NAME} | Serving Spruce Grove & Parkland County</p>
-        </div>
+        <div class="footer"><p><a href="/" style="color: white;">← Back to Home</a></p></div>
     </body>
     </html>
     '''
@@ -646,111 +760,16 @@ def inquire():
              datetime.now().date(), 'new'))
         conn.commit()
         conn.close()
-        
-        return '''
-        <!DOCTYPE html>
-        <html>
-        <head><title>Inquiry Sent</title></head>
-        <body style="font-family: Georgia; text-align: center; padding: 50px;">
-            <h1 style="color: #1a3d1a;">✅ Thank You!</h1>
-            <p>Your advertising inquiry has been received. We'll be in touch within 24 hours.</p>
-            <a href="/" style="color: #1a3d1a;">← Back to Home</a>
-            <a href="/advertise" style="color: #1a3d1a; margin-left: 20px;">View Advertising Options →</a>
-        </body>
-        </html>
-        '''
+        return '<html><body style="text-align:center;padding:50px"><h1>✅ Thank You!</h1><p>We will contact you within 24 hours.</p><a href="/">← Back</a></body></html>'
     
-    # GET request - show inquiry form
     package = request.args.get('package', '')
     return f'''
     <!DOCTYPE html>
     <html>
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>Advertising Inquiry - Spruce Grove Gazette</title>
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-        <style>
-            body {{ font-family: Georgia, serif; background: #f9f9f5; margin: 0; }}
-            .header {{ background: #1a3d1a; color: white; padding: 30px; text-align: center; }}
-            .header h1 {{ margin: 0; font-size: 32px; }}
-            .container {{ max-width: 600px; margin: 0 auto; padding: 40px 20px; }}
-            .form-card {{ background: white; border-radius: 15px; padding: 30px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }}
-            input, select, textarea {{ width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px; font-family: inherit; }}
-            button {{ background: #1a3d1a; color: white; padding: 12px 30px; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; font-weight: bold; }}
-            button:hover {{ background: #0d260d; }}
-            .btn-back {{ display: inline-block; background: #666; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 20px; }}
-            .footer {{ background: #0d260d; color: white; text-align: center; padding: 30px; margin-top: 40px; }}
-        </style>
+    <head><title>Advertising Inquiry</title>
+    <style>body{{font-family:Georgia;background:#f9f9f5;margin:0}}.header{{background:#1a3d1a;color:white;padding:30px;text-align:center}}.container{{max-width:600px;margin:0 auto;padding:40px20px}}.form-card{{background:white;border-radius:15px;padding:30px}}input,select,textarea{{width:100%;padding:12px;margin:10px0;border:1px solid #ddd;border-radius:5px}}button{{background:#1a3d1a;color:white;padding:12px30px;border:none;border-radius:5px;cursor:pointer}}.footer{{background:#0d260d;color:white;text-align:center;padding:30px;margin-top:40px}}</style>
     </head>
-    <body>
-        <div class="header">
-            <h1>📰 Advertising Inquiry</h1>
-            <p>Tell us about your business and we'll create a custom proposal</p>
-        </div>
-        <div class="container">
-            <div class="form-card">
-                <h2>Request Information</h2>
-                <p>Fill out the form below and we'll send you our complete media kit with rates and audience demographics.</p>
-                <form method="POST">
-                    <input type="text" name="business_name" placeholder="Business Name" required>
-                    <input type="text" name="contact_name" placeholder="Your Name" required>
-                    <input type="email" name="email" placeholder="Email Address" required>
-                    <input type="tel" name="phone" placeholder="Phone Number">
-                    <select name="package_interest">
-                        <option value="">I'm interested in...</option>
-                        <option value="Digital Display Ad" {'selected' if package == 'display' else ''}>Digital Display Ad ($150/month)</option>
-                        <option value="Sponsored Article" {'selected' if package == 'sponsored' else ''}>Sponsored Article ($250/article)</option>
-                        <option value="Community Spotlight" {'selected' if package == 'spotlight' else ''}>Community Spotlight ($400/month)</option>
-                        <option value="Custom Package">Custom Package</option>
-                    </select>
-                    <textarea name="message" rows="5" placeholder="Tell us about your business and advertising goals..."></textarea>
-                    <button type="submit">Send Inquiry →</button>
-                </form>
-                <div style="text-align: center; margin-top: 20px;">
-                    <a href="/advertise" class="btn-back">← Back to Advertising Options</a>
-                </div>
-            </div>
-        </div>
-        <div class="footer">
-            <p><a href="/" style="color: white;">← Back to Home</a></p>
-            <p>© {datetime.now().year} {NEWSPAPER_NAME}</p>
-        </div>
-    </body>
-    </html>
-    '''
-
-# ============================================
-# SUPPORTER ROUTE
-# ============================================
-
-@app.route('/support')
-def support():
-    return '''
-    <!DOCTYPE html>
-    <html>
-    <head><title>Become a Supporter</title>
-    <style>
-        body { font-family: Georgia; background: #f9f9f5; margin: 0; }
-        .header { background: #1a3d1a; color: white; padding: 30px; text-align: center; }
-        .container { max-width: 1000px; margin: 0 auto; padding: 40px 20px; }
-        .pricing-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 30px; }
-        .pricing-card { background: white; border-radius: 15px; padding: 30px; text-align: center; }
-        .pricing-card.featured { border: 2px solid #D4A017; position: relative; }
-        .popular-badge { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: #D4A017; padding: 5px 15px; border-radius: 20px; font-size: 12px; }
-        .price { font-size: 48px; font-weight: bold; color: #1a3d1a; margin: 20px 0; }
-        .btn { background: #1a3d1a; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block; margin-top: 20px; }
-        @media (max-width: 768px) { .pricing-grid { grid-template-columns: 1fr; } }
-    </style>
-    </head>
-    <body>
-        <div class="header"><h1>🌟 Support Local Journalism</h1></div>
-        <div class="container"><div class="pricing-grid">
-            <div class="pricing-card"><h3>Free Reader</h3><div class="price">$0</div><a href="/subscribe" class="btn">Current Plan</a></div>
-            <div class="pricing-card featured"><div class="popular-badge">MOST POPULAR</div><h3>Monthly Supporter</h3><div class="price">$5<span style="font-size:14px">/month</span></div><a href="#" class="btn" onclick="alert('Payment coming soon!')">Become a Supporter</a></div>
-            <div class="pricing-card"><h3>Yearly Supporter</h3><div class="price">$50<span style="font-size:14px">/year</span></div><a href="#" class="btn" onclick="alert('Payment coming soon!')">Join Yearly</a></div>
-        </div><p style="text-align:center;margin-top:40px"><a href="/">← Back to Home</a></p></div>
-    </body>
+    <body><div class="header"><h1>📰 Advertising Inquiry</h1></div><div class="container"><div class="form-card"><h2>Request Information</h2><form method="POST"><input type="text" name="business_name" placeholder="Business Name" required><input type="text" name="contact_name" placeholder="Your Name" required><input type="email" name="email" placeholder="Email" required><input type="tel" name="phone" placeholder="Phone"><select name="package_interest"><option value="">I'm interested in...</option><option value="Digital Display Ad" {'selected' if package == 'display' else ''}>Digital Display Ad ($150/month)</option><option value="Sponsored Article" {'selected' if package == 'sponsored' else ''}>Sponsored Article ($250/article)</option><option value="Community Spotlight" {'selected' if package == 'spotlight' else ''}>Community Spotlight ($400/month)</option></select><textarea name="message" rows="4" placeholder="Tell us about your business..."></textarea><button type="submit">Send Inquiry →</button></form><a href="/advertise">← Back</a></div></div><div class="footer"><p><a href="/" style="color:white">← Back to Home</a></p></div></body>
     </html>
     '''
 
