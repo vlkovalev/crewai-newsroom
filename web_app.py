@@ -202,11 +202,9 @@ def get_businesses(category=None, limit=6):
 # ============================================
 # NEWS ARTICLES DATA
 # ============================================
-
 news_articles = [
-{"id": 99, "title": "Test Article for Make Automation", "date": "April 24, 2026", "source": "Test", "summary": "This is a test article to verify our automation is working correctly.", "category": "Technology", "featured": False},
-    {"id": 1, "title": "Province Pledges $136 Million for Parkland County Highway Upgrades", "date": "March 4, 2026", "source": "Parkland County", "summary": "The Government of Alberta's 2026 Budget confirms continued investment in Highway 60 twinning between Highways 16 and 16A, including a rail overpass to support the Acheson Industrial Area. An additional $20 million has been committed for Highway 16 improvements at Range Road 20, moving to design phase in 2026.", "category": "Infrastructure", "featured": True},
-    {"id": 2, "title": "Parkland Food Bank Secures Land for New $1.2 Million Facility", "date": "January 4, 2026", "source": "Parkland Food Bank", "summary": "After 40 years of serving the Tri-Region, the Parkland Food Bank has purchased a 2.86-acre property in Spruce Grove for a new, larger facility.", "category": "Community", "featured": False},
+    {"id": 1, "title": "Province Pledges $136 Million for Parkland County Highway Upgrades", "date": "March 4, 2026", "source": "Parkland County", "summary": "The Government of Alberta's 2026 Budget confirms continued investment in Highway 60 twinning...", "category": "Infrastructure", "featured": True},
+    {"id": 2, "title": "Parkland Food Bank Secures Land for New $1.2 Million Facility", "date": "January 4, 2026", "source": "Parkland Food Bank", "summary": "After 40 years of serving the Tri-Region, the Parkland Food Bank has purchased a 2.86-acre property...", "category": "Community", "featured": False},
     {"id": 3, "title": "Panthers Advance to Regional Finals After Thrilling Overtime Victory", "date": "April 23, 2026", "source": "Spruce Grove Panthers", "summary": "The Spruce Grove Panthers secured their spot in the regional finals with a dramatic 34-31 overtime victory against the St. Albert Storm. Quarterback Marcus Chen threw for 287 yards and three touchdowns.", "category": "Sports", "featured": False},
     {"id": 4, "title": "New Tech Hub Coming to Downtown Spruce Grove, Creating 150 Jobs", "date": "April 22, 2026", "source": "City of Spruce Grove", "summary": "Nexus Digital Solutions will renovate the historic Johnson Building on Main Street, transforming it into a modern workspace while preserving its heritage character. The $25 million project is expected to bring 150 high-tech jobs.", "category": "Business", "featured": False},
     {"id": 5, "title": "Parkland School Division Receives $354,000 Annual Mental Health Grant", "date": "December 18, 2025", "source": "Parkland School Division", "summary": "The division received approximately $834,000 through the Mental Health in School Pilot project. Alberta Education has now added a wellbeing and mental health grant to the funding manual, with PSD receiving approximately $354,000 annually.", "category": "Education", "featured": False},
@@ -214,9 +212,10 @@ news_articles = [
     {"id": 7, "title": "Tri Leisure Centre Receives $235,313 Grant for Boiler Replacement", "date": "December 9, 2025", "source": "Parkland County Council", "summary": "Council approved grant funds for energy reduction projects at the Tri Leisure Centre, including a boiler replacement project partially funded by a $235,313 grant.", "category": "Recreation", "featured": False},
     {"id": 8, "title": "Council Approves $250,000 for Fire Tanker Replacement", "date": "December 9, 2025", "source": "Parkland County Council", "summary": "Parkland County Council has approved $250,000 in additional funding from the Lifecycle Restricted Surplus Account for the replacement of a fire water tanker truck for Fire District 1.", "category": "Emergency Services", "featured": False},
     {"id": 9, "title": "Public Hearing Set for March 24 on Proposed Road Closure", "date": "March 10, 2026", "source": "Parkland County", "summary": "A public hearing has been scheduled for March 24, 2026, regarding Bylaw 2026-13, which proposes to close a portion of road for sale in Parkland County.", "category": "Government", "featured": False},
-    {"id": 10, "title": "County Recognizes November as Family Violence Prevention Month", "date": "September 9, 2025", "source": "Parkland County Council", "summary": "Parkland County Council has officially proclaimed several awareness campaigns for November 2025, including Family Violence Prevention Month, Seniors' Fall Prevention Month, Restorative Justice Week, GIS Day, and World Pancreatic Cancer Day.", "category": "Community", "featured": False}
+    {"id": 10, "title": "County Recognizes November as Family Violence Prevention Month", "date": "September 9, 2025", "source": "Parkland County Council", "summary": "Parkland County Council has officially proclaimed several awareness campaigns for November 2025, including Family Violence Prevention Month, Seniors' Fall Prevention Month, Restorative Justice Week, GIS Day, and World Pancreatic Cancer Day.", "category": "Community", "featured": False},
+ # ... rest of your articles ...
+    {"id": 99, "title": "Test Article for Make Automation", "date": "April 24, 2026", "source": "Test", "summary": "This is a test article to verify our automation is working correctly.", "category": "Technology", "featured": False}
 ]
-
 # ============================================
 # HOME PAGE
 # ============================================
@@ -1150,7 +1149,48 @@ def sw():
 @app.route('/health')
 def health():
     return jsonify({"status": "healthy", "time": datetime.now().isoformat()})
-
+@app.route('/create-test-rss-article')
+def create_test_rss_article():
+    """Create a test article for RSS feed automation testing"""
+    from datetime import datetime
+    
+    test_title = "Make.com Automation is Working!"
+    test_content = """
+    <h2>Make.com Automation is Working!</h2>
+    <p>Spruce Grove, AB — This is a test article to confirm our automated social media posting is functioning correctly.</p>
+    <p>Make.com successfully detected this new article in the RSS feed and is processing it for distribution to our social channels.</p>
+    <p>— The Spruce Grove Gazette</p>
+    """
+    
+    output_file = f"test_article_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
+    with open(output_file, "w", encoding="utf-8") as f:
+        f.write(f"""
+        <!DOCTYPE html>
+        <html>
+        <head><title>{test_title} - Spruce Grove Gazette</title></head>
+        <body style="font-family: Georgia; max-width: 800px; margin: 0 auto; padding: 20px;">
+            <h1>📰 Spruce Grove Gazette</h1>
+            <h2>{test_title}</h2>
+            <div>{test_content}</div>
+            <p><a href="/">Back to Home</a></p>
+        </body>
+        </html>
+        """)
+    
+    return f"""
+    <!DOCTYPE html>
+    <html>
+    <head><title>Test Article Created</title></head>
+    <body style="font-family: Georgia; text-align: center; padding: 50px;">
+        <h1 style="color: #1a3d1a;">✅ Test Article Created!</h1>
+        <p>Your RSS feed should now have a new item.</p>
+        <p>File created: {output_file}</p>
+        <a href="/rss">View RSS Feed →</a>
+        <br>
+        <a href="/">Back to Home</a>
+    </body>
+    </html>
+    """
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 10000))
     app.run(host='0.0.0.0', port=port)
