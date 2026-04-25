@@ -526,15 +526,11 @@ def article_page(article_id):
     '''
 
 # ============================================
-# SUPPORTER PAGE WITH PAYPAL (Fixed - No f-string issues)
+# SUPPORTER PAGE WITH LIVE PAYPAL
 # ============================================
 
 @app.route('/support')
 def support():
-    # Your actual PayPal Plan IDs
-    MONTHLY_PLAN_ID = "P-0PA287541E8427458NHV7MEY"    # $5/month
-    YEARLY_PLAN_ID = "P-43731273WF611694DNHV7NUQ"     # $50/year
-    
     return '''
     <!DOCTYPE html>
     <html>
@@ -574,7 +570,8 @@ def support():
             .footer { background: #0d260d; color: white; text-align: center; padding: 30px; margin-top: 40px; }
             @media (max-width: 768px) { .pricing-grid { grid-template-columns: 1fr; } .impact-grid { grid-template-columns: 1fr; } }
         </style>
-        <script src="https://www.paypal.com/sdk/js?client-id=Aa9RxmM6ixcweCszja-0kFbxZmkaWGOCycDUYxDyJUFSNxEgPv91dHaIyAbGd-SSHm0PzU32em5Ugnev&currency=CAD&vault=true&intent=subscription"></script>
+        <!-- LIVE PayPal SDK -->
+        <script src="https://www.paypal.com/sdk/js?client-id=ARtcRWqbrpvaJo2wJNJewoyuPm0QlT6_FyP_X939IjMW7B1kWFDNw6t9L1rnysbeBWNemj2A-ellK7BW&currency=CAD&vault=true&intent=subscription"></script>
     </head>
     <body>
         <div class="header">
@@ -666,12 +663,12 @@ def support():
         </div>
         
         <script>
-            // Monthly Subscription ($5/month)
+            // Monthly Subscription ($5/month) - LIVE Plan ID
             paypal.Buttons({
                 style: { shape: 'rect', color: 'gold', layout: 'vertical', label: 'subscribe', height: 40 },
                 createSubscription: function(data, actions) {
                     return actions.subscription.create({
-                        plan_id: 'P-0PA287541E8427458NHV7MEY',
+                        plan_id: 'P-8WS19802N5406432ENHWAJVY',
                         application_context: { shipping_preference: 'NO_SHIPPING' }
                     });
                 },
@@ -685,12 +682,12 @@ def support():
                 }
             }).render('#paypal-monthly');
             
-            // Yearly Subscription ($50/year)
+            // Yearly Subscription ($50/year) - LIVE Plan ID
             paypal.Buttons({
                 style: { shape: 'rect', color: 'gold', layout: 'vertical', label: 'subscribe', height: 40 },
                 createSubscription: function(data, actions) {
                     return actions.subscription.create({
-                        plan_id: 'P-43731273WF611694DNHV7NUQ',
+                        plan_id: 'P-9BL3287175752125FNHWAKYY',
                         application_context: { shipping_preference: 'NO_SHIPPING' }
                     });
                 },
