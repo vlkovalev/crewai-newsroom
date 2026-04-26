@@ -21,7 +21,7 @@ ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # Make.com Webhook URL
-MAKE_WEBHOOK_URL = "https://hook.us2.make.com/djb5iamyclxfmewvari1dlqookx7v640"
+MAKE_WEBHOOK_URL = "https://hook.us2.make.com/hpj7fhu66leqoaxq2o84fwq5t9xcunxw"
 
 # ============================================
 # Database Setup
