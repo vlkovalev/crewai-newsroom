@@ -2,6 +2,8 @@ import os
 import sqlite3
 import smtplib
 import glob
+import requests
+import json
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime, date, timedelta
@@ -17,6 +19,9 @@ UPLOAD_FOLDER = 'static/uploads'
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+# Make.com Webhook URL
+MAKE_WEBHOOK_URL = "https://hook.us2.make.com/djb5iamyclxfmewvari1dlqookx7v640"
 
 # ============================================
 # Database Setup
@@ -263,20 +268,70 @@ def create_test_rss_article():
     """
 
 # ============================================
-# RSS FEED ROUTE - UPDATED with dynamic test articles
+# WEBHOOK TRIGGER FOR MAKE.COM
+# ============================================
+
+@app.route('/trigger-make')
+def trigger_make():
+    """Manually trigger Make.com webhook when a new article is published"""
+    
+    # Get the latest article
+    latest_article = news_articles[0]
+    
+    data = {
+        "title": latest_article['title'],
+        "link": f"https://sprucegrovegazette.com/article/{latest_article['id']}",
+        "summary": latest_article['summary'][:200],
+        "id": latest_article['id'],
+        "date": latest_article['date'],
+        "category": latest_article['category'],
+        "timestamp": datetime.now().isoformat()
+    }
+    
+    try:
+        response = requests.post(MAKE_WEBHOOK_URL, json=data, timeout=10)
+        return f"""
+        <!DOCTYPE html>
+        <html>
+        <head><title>Webhook Triggered</title></head>
+        <body style="font-family: Georgia; text-align: center; padding: 50px;">
+            <h1 style="color: #1a3d1a;">✅ Webhook Triggered Successfully!</h1>
+            <p><strong>Article:</strong> {latest_article['title']}</p>
+            <p><strong>Link:</strong> https://sprucegrovegazette.com/article/{latest_article['id']}</p>
+            <p><strong>Status Code:</strong> {response.status_code}</p>
+            <p>Make.com should now be processing your article!</p>
+            <a href="/" class="btn">← Back to Home</a>
+            <br><br>
+            <a href="/trigger-make" class="btn">Trigger Again</a>
+        </body>
+        </html>
+        """
+    except Exception as e:
+        return f"""
+        <!DOCTYPE html>
+        <html>
+        <head><title>Webhook Error</title></head>
+        <body style="font-family: Georgia; text-align: center; padding: 50px;">
+            <h1 style="color: #e74c3c;">❌ Webhook Failed</h1>
+            <p>Error: {str(e)}</p>
+            <a href="/">← Back to Home</a>
+        </body>
+        </html>
+        """
+
+# ============================================
+# RSS FEED ROUTE
 # ============================================
 
 @app.route('/rss')
 def rss_feed():
     """Generate RSS feed with newest articles first including test articles"""
     
-    # Get all articles including test articles from files
     all_articles = news_articles.copy()
     
     # Look for test article files and add them to the feed
     test_files = glob.glob('test_article_*.html')
     for test_file in test_files:
-        # Extract timestamp from filename
         timestamp = test_file.replace('test_article_', '').replace('.html', '')
         try:
             file_time = datetime.strptime(timestamp, '%Y%m%d_%H%M%S')
@@ -285,7 +340,7 @@ def rss_feed():
                 "title": "Make.com Automation Test Article",
                 "date": file_time.strftime('%B %d, %Y'),
                 "source": "Test",
-                "summary": "This is a test article to verify RSS feed automation is working correctly. Make.com should detect this article and trigger social media posts.",
+                "summary": "This is a test article to verify RSS feed automation is working correctly.",
                 "category": "Technology",
                 "featured": False
             })
@@ -303,13 +358,11 @@ def rss_feed():
     
     items = ""
     for article in sorted_articles[:15]:
-        # Format date for RSS
         try:
             pub_date = datetime.strptime(article['date'], '%B %d, %Y').strftime('%a, %d %b %Y %H:%M:%S -0700')
         except:
             pub_date = datetime.now().strftime('%a, %d %b %Y %H:%M:%S -0700')
         
-        # Escape XML special characters
         title = article['title'].replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
         summary = article['summary'][:200].replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
         
