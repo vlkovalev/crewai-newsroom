@@ -1,6 +1,7 @@
 import os
 import sqlite3
 import smtplib
+import glob
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime, date, timedelta
@@ -217,7 +218,7 @@ news_articles = [
 ]
 
 # ============================================
-# TEST ARTICLE ROUTE FOR RSS AUTOMATION
+# TEST ARTICLE ROUTE
 # ============================================
 
 @app.route('/create-test-rss-article')
@@ -262,17 +263,49 @@ def create_test_rss_article():
     """
 
 # ============================================
-# RSS FEED ROUTE - FIXED
+# RSS FEED ROUTE - UPDATED with dynamic test articles
 # ============================================
 
 @app.route('/rss')
 def rss_feed():
-    """Generate RSS feed from hardcoded news articles"""
-    items = []
-    for article in news_articles[:10]:
-        # Parse date safely
+    """Generate RSS feed with newest articles first including test articles"""
+    
+    # Get all articles including test articles from files
+    all_articles = news_articles.copy()
+    
+    # Look for test article files and add them to the feed
+    test_files = glob.glob('test_article_*.html')
+    for test_file in test_files:
+        # Extract timestamp from filename
+        timestamp = test_file.replace('test_article_', '').replace('.html', '')
         try:
-            pub_date = datetime.strptime(article['date'], '%B %d, %Y').strftime('%a, %d %b %Y 12:00:00 -0700')
+            file_time = datetime.strptime(timestamp, '%Y%m%d_%H%M%S')
+            all_articles.append({
+                "id": 999,
+                "title": "Make.com Automation Test Article",
+                "date": file_time.strftime('%B %d, %Y'),
+                "source": "Test",
+                "summary": "This is a test article to verify RSS feed automation is working correctly. Make.com should detect this article and trigger social media posts.",
+                "category": "Technology",
+                "featured": False
+            })
+        except:
+            pass
+    
+    # Sort articles by date (newest first)
+    def parse_date(article):
+        try:
+            return datetime.strptime(article['date'], '%B %d, %Y')
+        except:
+            return datetime.now()
+    
+    sorted_articles = sorted(all_articles, key=parse_date, reverse=True)
+    
+    items = ""
+    for article in sorted_articles[:15]:
+        # Format date for RSS
+        try:
+            pub_date = datetime.strptime(article['date'], '%B %d, %Y').strftime('%a, %d %b %Y %H:%M:%S -0700')
         except:
             pub_date = datetime.now().strftime('%a, %d %b %Y %H:%M:%S -0700')
         
@@ -280,7 +313,7 @@ def rss_feed():
         title = article['title'].replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
         summary = article['summary'][:200].replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
         
-        items.append(f"""
+        items += f"""
         <item>
             <title>{title}</title>
             <link>https://sprucegrovegazette.com/article/{article['id']}</link>
@@ -288,7 +321,7 @@ def rss_feed():
             <description>{summary}...</description>
             <pubDate>{pub_date}</pubDate>
         </item>
-        """)
+        """
     
     rss = f"""<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
@@ -299,7 +332,7 @@ def rss_feed():
     <description>Local news for Spruce Grove, Alberta and Parkland County</description>
     <language>en-ca</language>
     <lastBuildDate>{datetime.now().strftime('%a, %d %b %Y %H:%M:%S -0700')}</lastBuildDate>
-    {''.join(items)}
+    {items}
 </channel>
 </rss>"""
     return app.response_class(rss, mimetype='application/rss+xml')
@@ -495,7 +528,6 @@ def home():
                             <a href="/classifieds?category=sale" class="filter-chip" style="background: #f0f0f0; color: #333; padding: 6px 14px; border-radius: 20px; text-decoration: none; font-size: 12px;">🏷️ For Sale</a>
                             <a href="/classifieds?category=housing" class="filter-chip" style="background: #f0f0f0; color: #333; padding: 6px 14px; border-radius: 20px; text-decoration: none; font-size: 12px;">🏠 Housing</a>
                             <a href="/classifieds?category=services" class="filter-chip" style="background: #f0f0f0; color: #333; padding: 6px 14px; border-radius: 20px; text-decoration: none; font-size: 12px;">🔧 Services</a>
-                            <a href="/classifieds?category=garage" class="filter-chip" style
                             <a href="/classifieds?category=garage" class="filter-chip" style="background: #f0f0f0; color: #333; padding: 6px 14px; border-radius: 20px; text-decoration: none; font-size: 12px;">🏪 Garage Sales</a>
                         </div>
                         <div class="classifieds-preview">{classifieds_html}</div>
@@ -615,7 +647,7 @@ def article_page(article_id):
     '''
 
 # ============================================
-# SUPPORTER PAGE WITH PAYPAL
+# SUPPORTER PAGE
 # ============================================
 
 @app.route('/support')
