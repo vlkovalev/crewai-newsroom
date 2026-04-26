@@ -262,6 +262,49 @@ def create_test_rss_article():
     """
 
 # ============================================
+# RSS FEED ROUTE - FIXED
+# ============================================
+
+@app.route('/rss')
+def rss_feed():
+    """Generate RSS feed from hardcoded news articles"""
+    items = []
+    for article in news_articles[:10]:
+        # Parse date safely
+        try:
+            pub_date = datetime.strptime(article['date'], '%B %d, %Y').strftime('%a, %d %b %Y 12:00:00 -0700')
+        except:
+            pub_date = datetime.now().strftime('%a, %d %b %Y %H:%M:%S -0700')
+        
+        # Escape XML special characters
+        title = article['title'].replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+        summary = article['summary'][:200].replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+        
+        items.append(f"""
+        <item>
+            <title>{title}</title>
+            <link>https://sprucegrovegazette.com/article/{article['id']}</link>
+            <guid>https://sprucegrovegazette.com/article/{article['id']}</guid>
+            <description>{summary}...</description>
+            <pubDate>{pub_date}</pubDate>
+        </item>
+        """)
+    
+    rss = f"""<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+<channel>
+    <title>{NEWSPAPER_NAME}</title>
+    <link>https://sprucegrovegazette.com</link>
+    <atom:link href="https://sprucegrovegazette.com/rss" rel="self" type="application/rss+xml"/>
+    <description>Local news for Spruce Grove, Alberta and Parkland County</description>
+    <language>en-ca</language>
+    <lastBuildDate>{datetime.now().strftime('%a, %d %b %Y %H:%M:%S -0700')}</lastBuildDate>
+    {''.join(items)}
+</channel>
+</rss>"""
+    return app.response_class(rss, mimetype='application/rss+xml')
+
+# ============================================
 # HOME PAGE
 # ============================================
 
@@ -452,6 +495,7 @@ def home():
                             <a href="/classifieds?category=sale" class="filter-chip" style="background: #f0f0f0; color: #333; padding: 6px 14px; border-radius: 20px; text-decoration: none; font-size: 12px;">🏷️ For Sale</a>
                             <a href="/classifieds?category=housing" class="filter-chip" style="background: #f0f0f0; color: #333; padding: 6px 14px; border-radius: 20px; text-decoration: none; font-size: 12px;">🏠 Housing</a>
                             <a href="/classifieds?category=services" class="filter-chip" style="background: #f0f0f0; color: #333; padding: 6px 14px; border-radius: 20px; text-decoration: none; font-size: 12px;">🔧 Services</a>
+                            <a href="/classifieds?category=garage" class="filter-chip" style
                             <a href="/classifieds?category=garage" class="filter-chip" style="background: #f0f0f0; color: #333; padding: 6px 14px; border-radius: 20px; text-decoration: none; font-size: 12px;">🏪 Garage Sales</a>
                         </div>
                         <div class="classifieds-preview">{classifieds_html}</div>
@@ -571,7 +615,7 @@ def article_page(article_id):
     '''
 
 # ============================================
-# SUPPORTER PAGE WITH LIVE PAYPAL
+# SUPPORTER PAGE WITH PAYPAL
 # ============================================
 
 @app.route('/support')
@@ -1178,16 +1222,6 @@ def do_submit_business():
 def search():
     q = request.args.get('q', '')
     return f'<html><body style="text-align:center;padding:50px"><h1>🔍 Search Results for: "{q}"</h1><p>Search coming soon.</p><a href="/">← Back</a></body></html>'
-
-@app.route('/rss')
-def rss_feed():
-    conn = sqlite3.connect('gazette.db')
-    cursor = conn.cursor()
-    cursor.execute("SELECT title, content, published_date FROM articles ORDER BY published_date DESC LIMIT 10")
-    articles = cursor.fetchall()
-    conn.close()
-    rss = f'<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel><title>{NEWSPAPER_NAME}</title><link>https://sprucegrovegazette.com</link><description>Local news for Spruce Grove, Alberta</description><language>en-ca</language><lastBuildDate>{datetime.now().strftime("%a, %d %b %Y %H:%M:%S %z")}</lastBuildDate>{"".join([f"<item><title>{a[0]}</title><link>https://sprucegrovegazette.com/latest</link><description>{a[1][:200]}...</description><pubDate>{a[2]}</pubDate></item>" for a in articles])}</channel></rss>'
-    return app.response_class(rss, mimetype='application/rss+xml')
 
 @app.route('/manifest.json')
 def manifest():
