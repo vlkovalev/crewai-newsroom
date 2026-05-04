@@ -1000,7 +1000,10 @@ def support():
     return _support_html().replace('__PAYPAL_CLIENT_ID__', PAYPAL_CLIENT_ID)
 
 def _support_html():
-    return '''
+    # Get PayPal client ID from environment variable
+    paypal_client_id = os.environ.get('PAYPAL_CLIENT_ID', 'sb')
+    
+    return f'''
     <!DOCTYPE html>
     <html>
     <head>
@@ -1040,7 +1043,7 @@ def _support_html():
             .footer { background: #0d260d; color: white; text-align: center; padding: 30px; margin-top: 40px; }
             @media (max-width: 768px) { .pricing-grid { grid-template-columns: 1fr; } .impact-grid { grid-template-columns: 1fr; } }
         </style>
-        <script src="https://www.paypal.com/sdk/js?client-id=__PAYPAL_CLIENT_ID__&currency=CAD"></script>
+        <script src="https://www.paypal.com/sdk/js?client-id=ARtcRWqbrpvaJo2wJNJewoyuPm0QlT6_FyP_X939IjMW7B1kWFDNw6tU5L9rnysbeBWNemj2A-ellK7BW&currency=CAD"></script>
     </head>
     <body>
         <div class="header">
