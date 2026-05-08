@@ -625,11 +625,12 @@ def create_app():
     scheduler.add_job(generate_daily_articles, 'cron', hour=6, minute=0)  # 6 AM UTC daily
     scheduler.start()
 
-    # Generate articles immediately if the DB is nearly empty
-    if Article.query.count() <= 1:
-        import threading
-        t = threading.Thread(target=generate_daily_articles, daemon=True)
-        t.start()
+    # Generate articles immediately if the DB is nearly empty (must be inside app context)
+    with app.app_context():
+        if Article.query.count() <= 1:
+            import threading
+            t = threading.Thread(target=generate_daily_articles, daemon=True)
+            t.start()
 
     return app
 
