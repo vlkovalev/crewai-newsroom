@@ -1,0 +1,78 @@
+{% extends 'base.html' %}
+{% block title %}Business Directory — SG Gazette{% endblock %}
+{% block content %}
+<div class="container py-4">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="section-title mb-0">Business Directory</h2>
+    <a href="{{ url_for('list_business') }}" class="btn btn-gazette btn-sm">
+      <i class="bi bi-building-add"></i> List Your Business
+    </a>
+  </div>
+
+  <!-- Category filter -->
+  {% if cats %}
+  <div class="mb-4 d-flex flex-wrap gap-2">
+    <a href="{{ url_for('directory') }}"
+       class="btn btn-sm {% if not selected %}btn-gazette{% else %}btn-outline-secondary{% endif %}">All</a>
+    {% for c in cats %}
+    <a href="{{ url_for('directory', cat=c) }}"
+       class="btn btn-sm {% if selected == c %}btn-gazette{% else %}btn-outline-secondary{% endif %}">{{ c }}</a>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if businesses %}
+  <div class="row g-4">
+    {% for biz in businesses %}
+    <div class="col-md-6 col-lg-4">
+      <div class="card h-100 {% if biz.tier == 'featured' %}border border-warning border-2{% endif %}">
+        {% if biz.tier == 'featured' %}
+        <div class="text-center py-1" style="background:var(--sg-gold);color:white;font-size:.7rem;font-weight:700;border-radius:10px 10px 0 0;">
+          ★ FEATURED
+        </div>
+        {% endif %}
+        <div class="card-body">
+          <div class="d-flex gap-3 align-items-start mb-2">
+            {% if biz.logo_url %}
+            <img src="{{ biz.logo_url }}" alt="{{ biz.name }}" width="48" height="48"
+                 class="rounded" style="object-fit:cover;">
+            {% else %}
+            <div class="rounded d-flex align-items-center justify-content-center"
+                 style="width:48px;height:48px;background:var(--sg-green);color:white;font-size:1.3rem;">
+              <i class="bi bi-building"></i>
+            </div>
+            {% endif %}
+            <div>
+              <h6 class="fw-bold mb-0">{{ biz.name }}</h6>
+              <span class="badge bg-secondary" style="font-size:.65rem;">{{ biz.category }}</span>
+            </div>
+          </div>
+          {% if biz.description %}
+          <p class="small text-muted mb-2">{{ biz.description[:120] }}{% if biz.description|length > 120 %}…{% endif %}</p>
+          {% endif %}
+          <div class="small text-muted">
+            {% if biz.address %}<div><i class="bi bi-geo-alt"></i> {{ biz.address }}</div>{% endif %}
+            {% if biz.phone %}<div><i class="bi bi-telephone"></i> {{ biz.phone }}</div>{% endif %}
+            {% if biz.website %}
+            <div><i class="bi bi-globe"></i>
+              <a href="{{ biz.website }}" target="_blank" class="text-decoration-none">{{ biz.website|truncate(35) }}</a>
+            </div>
+            {% endif %}
+            {% if biz.email %}
+            <div><i class="bi bi-envelope"></i> {{ biz.email }}</div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="text-center py-5">
+    <i class="bi bi-building text-muted" style="font-size:3rem;"></i>
+    <p class="text-muted mt-3">No businesses listed yet.</p>
+    <a href="{{ url_for('list_business') }}" class="btn btn-gazette btn-sm">List yours for free</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

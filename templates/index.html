@@ -1,0 +1,140 @@
+{% extends 'base.html' %}
+{% block title %}Spruce Grove Gazette — Your Community News{% endblock %}
+{% block content %}
+
+<!-- MASTHEAD -->
+<div class="masthead">
+  <div class="container">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+      <div>
+        <h1 class="mb-1">Spruce Grove Gazette</h1>
+        <p class="tagline mb-0"><i class="bi bi-geo-alt"></i> Serving Spruce Grove, Alberta</p>
+      </div>
+      {% if weather %}
+      <div class="weather-widget text-center">
+        <img src="https://openweathermap.org/img/wn/{{ weather.icon }}@2x.png" width="50" alt="">
+        <div class="fw-bold fs-4">{{ weather.temp }}°C</div>
+        <div class="small">{{ weather.desc }}</div>
+        <div class="small opacity-75">Feels {{ weather.feels }}°C</div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<div class="container py-4">
+  <div class="row g-4">
+
+    <!-- MAIN ARTICLES -->
+    <div class="col-lg-8">
+      {% if articles %}
+        <!-- Featured -->
+        {% set feat = articles[0] %}
+        <div class="card mb-4">
+          {% if feat.image_url %}
+          <img src="{{ feat.image_url }}" class="article-img w-100" alt="{{ feat.title }}">
+          {% else %}
+          <div class="d-flex align-items-center justify-content-center bg-light" style="height:200px;border-radius:10px 10px 0 0;">
+            <i class="bi bi-newspaper text-muted" style="font-size:4rem;"></i>
+          </div>
+          {% endif %}
+          <div class="card-body">
+            <span class="badge-category">{{ feat.category }}</span>
+            <h2 class="mt-2 mb-1"><a href="{{ url_for('article_detail', slug=feat.slug) }}" class="text-decoration-none text-dark">{{ feat.title }}</a></h2>
+            <p class="text-muted small">By {{ feat.author }} · {{ feat.created_at.strftime('%B %d, %Y') }}</p>
+            <p class="text-muted">{{ feat.summary or feat.body[:200]|striptags }}...</p>
+            <a href="{{ url_for('article_detail', slug=feat.slug) }}" class="btn btn-gazette btn-sm">Read more</a>
+          </div>
+        </div>
+
+        <!-- Grid of remaining articles -->
+        <h5 class="section-title">Latest News</h5>
+        <div class="row row-cols-1 row-cols-md-2 g-3">
+          {% for art in articles[1:] %}
+          <div class="col">
+            <div class="card h-100">
+              {% if art.image_url %}
+              <img src="{{ art.image_url }}" class="article-img" style="height:140px;" alt="{{ art.title }}">
+              {% endif %}
+              <div class="card-body">
+                <span class="badge-category" style="font-size:.65rem;">{{ art.category }}</span>
+                <h6 class="mt-1 mb-1">
+                  <a href="{{ url_for('article_detail', slug=art.slug) }}" class="text-decoration-none text-dark">{{ art.title }}</a>
+                </h6>
+                <p class="text-muted small mb-1">{{ art.created_at.strftime('%b %d') }}</p>
+                <p class="small text-muted mb-0">{{ art.summary or art.body[:100]|striptags }}...</p>
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="text-center py-5">
+          <i class="bi bi-newspaper text-muted" style="font-size:4rem;"></i>
+          <p class="text-muted mt-3">No articles yet. <a href="{{ url_for('admin_login') }}">Sign in</a> to add the first one.</p>
+        </div>
+      {% endif %}
+    </div>
+
+    <!-- SIDEBAR -->
+    <div class="col-lg-4">
+      <!-- Events -->
+      <div class="card mb-4">
+        <div class="card-body">
+          <h5 class="section-title">Upcoming Events</h5>
+          {% if events %}
+            {% for ev in events %}
+            <div class="d-flex gap-2 mb-2 pb-2 border-bottom">
+              <div class="text-center" style="min-width:40px;">
+                <div class="fw-bold text-success small">{{ ev.start_date.strftime('%b') }}</div>
+                <div class="fw-bold fs-5 lh-1">{{ ev.start_date.day }}</div>
+              </div>
+              <div>
+                <div class="fw-semibold small">{{ ev.title }}</div>
+                <div class="text-muted small">{{ ev.location or 'Spruce Grove' }}</div>
+              </div>
+            </div>
+            {% endfor %}
+            <a href="{{ url_for('events') }}" class="btn btn-outline-success btn-sm w-100">All Events</a>
+          {% else %}
+            <p class="text-muted small">No upcoming events.</p>
+            <a href="{{ url_for('submit_event') }}" class="btn btn-outline-success btn-sm">Submit Event</a>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Support / Subscribe CTA -->
+      <div class="card mb-4" style="background: linear-gradient(135deg,#1a5c2a,#2e8b50); color: white;">
+        <div class="card-body text-center">
+          <i class="bi bi-heart-fill text-warning fs-2"></i>
+          <h5 class="mt-2 text-white">Support Local News</h5>
+          <p class="small opacity-75">Help keep community journalism alive in Spruce Grove.</p>
+          <a href="{{ url_for('subscribe') }}" class="btn btn-warning btn-sm fw-bold">Support the Gazette</a>
+        </div>
+      </div>
+
+      <!-- Quick Links -->
+      <div class="card">
+        <div class="card-body">
+          <h5 class="section-title">Community</h5>
+          <div class="list-group list-group-flush">
+            <a href="{{ url_for('classifieds') }}" class="list-group-item list-group-item-action d-flex align-items-center gap-2">
+              <i class="bi bi-tag"></i> Classifieds
+            </a>
+            <a href="{{ url_for('directory') }}" class="list-group-item list-group-item-action d-flex align-items-center gap-2">
+              <i class="bi bi-building"></i> Business Directory
+            </a>
+            <a href="{{ url_for('submit_event') }}" class="list-group-item list-group-item-action d-flex align-items-center gap-2">
+              <i class="bi bi-calendar-plus"></i> Submit an Event
+            </a>
+            <a href="{{ url_for('post_classified') }}" class="list-group-item list-group-item-action d-flex align-items-center gap-2">
+              <i class="bi bi-megaphone"></i> Post a Classified
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

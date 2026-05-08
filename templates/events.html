@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+{% block title %}Community Events — SG Gazette{% endblock %}
+{% block content %}
+<div class="container py-4">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="section-title mb-0">Upcoming Events</h2>
+    <a href="{{ url_for('submit_event') }}" class="btn btn-gazette btn-sm">
+      <i class="bi bi-calendar-plus"></i> Submit Event
+    </a>
+  </div>
+
+  {% if events %}
+  <div class="row g-4">
+    {% for ev in events %}
+    <div class="col-md-6 col-lg-4">
+      <div class="card h-100">
+        <div class="card-body">
+          <div class="d-flex gap-3 mb-3">
+            <div class="text-center px-3 py-2 rounded"
+                 style="background:var(--sg-green);color:white;min-width:60px;">
+              <div class="fw-bold small">{{ ev.start_date.strftime('%b').upper() }}</div>
+              <div class="fw-bold fs-3 lh-1">{{ ev.start_date.day }}</div>
+            </div>
+            <div>
+              <h6 class="fw-bold mb-1">{{ ev.title }}</h6>
+              <div class="text-muted small">
+                <i class="bi bi-geo-alt"></i> {{ ev.location or 'Spruce Grove' }}
+              </div>
+              {% if ev.end_date %}
+              <div class="text-muted small">
+                <i class="bi bi-clock"></i>
+                {{ ev.start_date.strftime('%I:%M %p') }} – {{ ev.end_date.strftime('%I:%M %p') }}
+              </div>
+              {% endif %}
+            </div>
+          </div>
+          {% if ev.description %}
+          <p class="small text-muted mb-2">{{ ev.description[:150] }}{% if ev.description|length > 150 %}…{% endif %}</p>
+          {% endif %}
+          {% if ev.contact %}
+          <div class="small text-muted">
+            <i class="bi bi-envelope"></i> {{ ev.contact }}
+          </div>
+          {% endif %}
+          <span class="badge bg-success mt-2">{{ ev.category }}</span>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="text-center py-5">
+    <i class="bi bi-calendar-x text-muted" style="font-size:3rem;"></i>
+    <p class="text-muted mt-3">No upcoming events right now.</p>
+    <a href="{{ url_for('submit_event') }}" class="btn btn-gazette btn-sm">Submit the first one</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
