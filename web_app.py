@@ -635,7 +635,9 @@ def create_app():
     return app
 
 
+# Initialize DB, seed data, and start scheduler (runs for both gunicorn and direct python)
+create_app()
+
 if __name__ == '__main__':
-    create_app()
     port = int(os.environ.get('PORT', 5001))
-    app.run(debug=True, port=port)
+    app.run(debug=False, port=port)
