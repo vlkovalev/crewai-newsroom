@@ -264,6 +264,22 @@ if os.environ.get('SCHEDULER_ENABLED', '1') == '1':
 
 # ============= ROUTES =============
 
+_SW_CLEANUP = (
+    b'<script>if("serviceWorker"in navigator){'
+    b'navigator.serviceWorker.getRegistrations()'
+    b'.then(function(r){for(var s of r)s.unregister();});'
+    b'if("caches"in window)caches.keys()'
+    b'.then(function(k){for(var n of k)caches.delete(n);});'
+    b'}</script>'
+)
+
+@app.after_request
+def inject_sw_cleanup(response):
+    if 'text/html' in response.content_type:
+        response.data = response.data.replace(b'</head>', _SW_CLEANUP + b'</head>', 1)
+    return response
+
+
 @app.route('/')
 def home():
     try:
