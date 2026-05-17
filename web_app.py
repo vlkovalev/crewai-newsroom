@@ -259,7 +259,7 @@ if os.environ.get('SCHEDULER_ENABLED', '1') == '1':
         name='Noon News Update'
     )
     scheduler.start()
-    print("Auto-news scheduler started - will update at 6 AM and 12 PM daily")
+    print("Auto-news scheduler started")
 # ============= END AUTO NEWS UPDATER =============
 
 # ============= ROUTES =============
@@ -994,16 +994,13 @@ def support():
     return _support_html().replace('__PAYPAL_CLIENT_ID__', PAYPAL_CLIENT_ID)
 
 def _support_html():
-    # Get PayPal client ID from environment variable
-    paypal_client_id = os.environ.get('PAYPAL_CLIENT_ID', 'sb')
-    
-    return f'''
+    return '''
     <!DOCTYPE html>
     <html>
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>Support The Spruce Grove Gazette</title>
+        <title>Become a Supporter - Spruce Grove Gazette</title>
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
         <style>
             :root { --primary: #1a3d1a; --primary-light: #2C5F2D; --accent: #D4A017; --donate: #e74c3c; }
@@ -1026,18 +1023,17 @@ def _support_html():
             .features i { color: #27ae60; margin-right: 10px; width: 20px; }
             .btn { display: inline-block; background: var(--primary); color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin-top: 20px; font-weight: bold; cursor: pointer; border: none; }
             .btn:hover { background: #0d260d; }
-            .paypal-container { margin-top: 20px; min-height: 55px; }
+            .paypal-container { margin-top: 20px; min-height: 120px; }
             .custom-amount { margin-top: 20px; }
             .custom-amount input { padding: 12px; width: 150px; border: 2px solid var(--donate); border-radius: 5px; text-align: center; font-size: 18px; margin: 10px; }
             .impact-section { background: white; border-radius: 15px; padding: 40px; text-align: center; margin-top: 50px; }
             .impact-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 30px; margin-top: 30px; }
             .impact-card { text-align: center; padding: 20px; }
             .impact-card i { font-size: 48px; color: var(--accent); margin-bottom: 15px; }
-            .support-note { background: #e8f5e9; border-radius: 15px; padding: 25px; text-align: center; margin-top: 40px; }
             .footer { background: #0d260d; color: white; text-align: center; padding: 30px; margin-top: 40px; }
             @media (max-width: 768px) { .pricing-grid { grid-template-columns: 1fr; } .impact-grid { grid-template-columns: 1fr; } }
         </style>
-        <script src="https://www.paypal.com/sdk/js?client-id=ARtcRWqbrpvaJo2wJNJewoyuPm0QlT6_FyP_X939IjMW7B1kWFDNw6tU5L9rnysbeBWNemj2A-ellK7BW&currency=CAD"></script>
+        <script src="https://www.paypal.com/sdk/js?client-id=__PAYPAL_CLIENT_ID__&currency=CAD&vault=true&intent=subscription"></script>
     </head>
     <body>
         <div class="header">
@@ -1046,7 +1042,6 @@ def _support_html():
         </div>
         <div class="container">
             <div class="pricing-grid">
-                <!-- Free Option -->
                 <div class="pricing-card">
                     <h3>Free Reader</h3>
                     <div class="price">$0</div>
@@ -1055,30 +1050,27 @@ def _support_html():
                         <li><i class="fas fa-check"></i> Access to all articles</li>
                         <li><i class="fas fa-check"></i> Community calendar</li>
                         <li><i class="fas fa-check"></i> Business directory access</li>
+                        <li><i class="fas fa-check"></i> Event listings</li>
                     </ul>
                     <a href="/subscribe" class="btn">Subscribe Free →</a>
                 </div>
-                
-                <!-- $5 Monthly Supporter (One-time) -->
                 <div class="pricing-card">
-                    <h3>Supporter</h3>
-                    <div class="price">$5</div>
+                    <h3>Monthly Supporter</h3>
+                    <div class="price">$5<small>/month</small></div>
                     <ul class="features">
                         <li><i class="fas fa-check"></i> All free features</li>
-                        <li><i class="fas fa-check"></i> Supporter recognition</li>
+                        <li><i class="fas fa-check"></i> Supporter badge</li>
                         <li><i class="fas fa-check"></i> Weekly exclusive content</li>
-                        <li><i class="fas fa-check"></i> Thank you acknowledgment</li>
+                        <li><i class="fas fa-check"></i> Behind-the-scenes updates</li>
                     </ul>
-                    <div id="paypal-5" class="paypal-container"></div>
+                    <div class="paypal-container" id="paypal-monthly"></div>
                 </div>
-                
-                <!-- One-Time Donation -->
                 <div class="pricing-card donation-card">
                     <div class="donation-badge">❤️ MAKE A DONATION</div>
                     <h3>Support Local Journalism</h3>
-                    <div class="price">$<span id="customAmountDisplay">25</span><small>/one-time</small></div>
+                    <div class="price">$<span id="customAmountDisplay">10</span><small>/one-time</small></div>
                     <div class="custom-amount">
-                        <input type="number" id="customAmount" min="5" max="1000" step="5" value="25">
+                        <input type="number" id="customAmount" min="5" max="1000" step="5" value="10">
                         <div style="font-size:12px;color:#666;">CAD $5 - $1000</div>
                     </div>
                     <ul class="features">
@@ -1087,26 +1079,23 @@ def _support_html():
                         <li><i class="fas fa-check"></i> Supporter recognition</li>
                         <li><i class="fas fa-check"></i> Tax receipt over $20</li>
                     </ul>
-                    <div id="customPaypalContainer" class="paypal-container"></div>
+                    <div id="customPaypalContainer"></div>
                 </div>
-                
-                <!-- $50 Yearly Supporter (One-time) -->
                 <div class="pricing-card featured">
                     <div class="popular-badge">⭐ BEST VALUE</div>
-                    <h3>Champion</h3>
-                    <div class="price">$50</div>
-                    <div style="font-size:14px;color:#666;margin-top:-15px;">Premium supporter</div>
+                    <h3>Yearly Supporter</h3>
+                    <div class="price">$50<small>/year</small></div>
+                    <div style="font-size:14px;color:#666;margin-top:-15px;">Save $10 vs monthly</div>
                     <ul class="features">
-                        <li><i class="fas fa-check"></i> All supporter benefits</li>
+                        <li><i class="fas fa-check"></i> All monthly benefits</li>
                         <li><i class="fas fa-check"></i> Name in supporter roll</li>
                         <li><i class="fas fa-check"></i> Gazette merch discount</li>
                         <li><i class="fas fa-check"></i> Annual supporter event</li>
                         <li><i class="fas fa-check"></i> Input on coverage priorities</li>
                     </ul>
-                    <div id="paypal-50" class="paypal-container"></div>
+                    <div class="paypal-container" id="paypal-yearly"></div>
                 </div>
             </div>
-            
             <div class="impact-section">
                 <h2>Your Support Makes a Difference</h2>
                 <div class="impact-grid">
@@ -1115,145 +1104,72 @@ def _support_html():
                     <div class="impact-card"><i class="fas fa-mobile-alt"></i><h3>$50</h3><p>Keeps the Gazette free for everyone for one month</p></div>
                 </div>
             </div>
-            
-            <div class="support-note">
-                <i class="fas fa-lock" style="margin-right:10px; color:#1a3d1a;"></i>
+            <div style="text-align:center;margin-top:30px;padding:20px;background:#e8f5e9;border-radius:10px;">
+                <i class="fas fa-lock" style="margin-right:10px;"></i>
                 <strong>Secure payments by PayPal</strong> — Your payment information is encrypted and never stored on our servers.
+                <br><small>You can cancel your subscription anytime from your PayPal account.</small>
                 <br><br><i class="fas fa-receipt"></i> <strong>Tax receipts available for donations over $20</strong>
             </div>
         </div>
-        
         <div class="footer">
-            <p><a href="/" style="color:white;">← Back to Home</a> | <a href="/advertise" style="color:#D4A017;">Advertise</a></p>
-            <p>© 2025 The Spruce Grove Gazette | Serving Spruce Grove & Parkland County</p>
+            <p><a href="/" style="color:white;">← Back to Home</a></p>
+            <p>© 2026 The Spruce Grove Gazette | Serving Spruce Grove & Parkland County</p>
         </div>
-        
         <script>
-            // $5 Donation Button
-            if(document.getElementById('paypal-5')) {
-                paypal.Buttons({
-                    style: { shape: 'rect', color: 'gold', label: 'paypal', height: 40 },
-                    createOrder: function(data, actions) {
-                        return actions.order.create({
-                            purchase_units: [{
-                                amount: { value: '5.00', currency_code: 'CAD' },
-                                description: 'Spruce Grove Gazette Supporter - $5 Donation'
-                            }]
-                        });
-                    },
-                    onApprove: function(data, actions) {
-                        return actions.order.capture().then(function(details) {
-                            alert('Thank you for your $5 donation! You are now a Gazette Supporter!');
-                            window.location.href = '/support-thank-you';
-                        });
-                    },
-                    onError: function(err) {
-                        console.error(err);
-                        alert('Payment failed. Please try again.');
-                    }
-                }).render('#paypal-5');
-            }
-            
-            // $50 Donation Button
-            if(document.getElementById('paypal-50')) {
-                paypal.Buttons({
-                    style: { shape: 'rect', color: 'gold', label: 'paypal', height: 40 },
-                    createOrder: function(data, actions) {
-                        return actions.order.create({
-                            purchase_units: [{
-                                amount: { value: '50.00', currency_code: 'CAD' },
-                                description: 'Spruce Grove Gazette Champion - $50 Donation'
-                            }]
-                        });
-                    },
-                    onApprove: function(data, actions) {
-                        return actions.order.capture().then(function(details) {
-                            alert('Thank you for your $50 donation! You are now a Gazette Champion!');
-                            window.location.href = '/support-thank-you';
-                        });
-                    },
-                    onError: function(err) {
-                        console.error(err);
-                        alert('Payment failed. Please try again.');
-                    }
-                }).render('#paypal-50');
-            }
-            
-            // Custom one-time donation
+            paypal.Buttons({
+                style: { shape: 'rect', color: 'gold', layout: 'vertical', label: 'subscribe', height: 40 },
+                createSubscription: function(data, actions) {
+                    return actions.subscription.create({ plan_id: 'P-8WS19802N5406432ENHWAJVY', application_context: { shipping_preference: 'NO_SHIPPING' } });
+                },
+                onApprove: function(data, actions) { alert('Thank you! You are now a Monthly Supporter.'); window.location.href = '/support-thank-you'; },
+                onError: function(err) { console.error(err); alert('Payment failed. Please try again.'); }
+            }).render('#paypal-monthly');
+            paypal.Buttons({
+                style: { shape: 'rect', color: 'gold', layout: 'vertical', label: 'subscribe', height: 40 },
+                createSubscription: function(data, actions) {
+                    return actions.subscription.create({ plan_id: 'P-9BL3287175752125FNHWAKYY', application_context: { shipping_preference: 'NO_SHIPPING' } });
+                },
+                onApprove: function(data, actions) { alert('Thank you! You are now a Yearly Supporter.'); window.location.href = '/support-thank-you'; },
+                onError: function(err) { console.error(err); alert('Payment failed. Please try again.'); }
+            }).render('#paypal-yearly');
             const customInput = document.getElementById('customAmount');
             const displaySpan = document.getElementById('customAmountDisplay');
-            
-            if(customInput) {
-                customInput.addEventListener('input', function() { 
-                    displaySpan.innerText = customInput.value; 
-                    renderCustomPaypalButton(); 
-                });
-            }
-            
+            customInput.addEventListener('input', function() { displaySpan.innerText = customInput.value; renderCustomPaypalButton(); });
             function renderCustomPaypalButton() {
-                const amount = parseFloat(customInput ? customInput.value : 25);
+                const amount = parseFloat(customInput.value);
                 const container = document.getElementById('customPaypalContainer');
-                if (container && amount >= 5 && amount <= 1000) {
+                if (container) {
                     container.innerHTML = '';
                     paypal.Buttons({
-                        style: { shape: 'rect', color: 'gold', label: 'paypal', height: 40 },
+                        style: { shape: 'rect', color: 'gold', layout: 'vertical', label: 'paypal', height: 40 },
                         createOrder: function(data, actions) {
-                            return actions.order.create({ 
-                                purchase_units: [{ 
-                                    amount: { value: amount.toFixed(2), currency_code: 'CAD' }, 
-                                    description: 'Spruce Grove Gazette Donation - $' + amount.toFixed(2)
-                                }] 
-                            });
+                            return actions.order.create({ purchase_units: [{ amount: { value: amount.toFixed(2), currency_code: 'CAD' }, description: 'Gazette Supporter Donation' }] });
                         },
                         onApprove: function(data, actions) {
-                            return actions.order.capture().then(function(details) {
-                                alert('Thank you for your generous donation of $' + amount.toFixed(2) + '!');
-                                window.location.href = '/support-thank-you';
-                            });
+                            return actions.order.capture().then(function(details) { alert('Thank you for your $' + amount.toFixed(2) + ' donation!'); window.location.href = '/support-thank-you'; });
                         },
-                        onError: function(err) { 
-                            console.error(err); 
-                            alert('Payment failed. Please try again.'); 
-                        }
+                        onError: function(err) { console.error(err); alert('Payment failed. Please try again.'); }
                     }).render('#customPaypalContainer');
-                } else if (container) {
-                    container.innerHTML = '<p style="color:#666;font-size:12px;">Enter an amount between $5 and $1000</p>';
                 }
             }
-            
             renderCustomPaypalButton();
         </script>
     </body>
     </html>
     '''
+
 @app.route('/support-thank-you')
 def support_thank_you():
     return '''
     <!DOCTYPE html>
     <html>
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>Thank You - Spruce Grove Gazette</title>
-        <style>
-            body { font-family: Georgia, serif; background: #f9f9f5; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
-            .thank-you-card { background: white; padding: 50px; border-radius: 20px; max-width: 500px; text-align: center; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
-            h1 { color: #1a3d1a; margin-bottom: 20px; }
-            .checkmark { font-size: 64px; margin-bottom: 20px; }
-            p { color: #555; line-height: 1.6; margin: 15px 0; }
-            .btn { display: inline-block; background: #1a3d1a; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin-top: 20px; }
-            .btn:hover { background: #0d260d; }
-        </style>
-    </head>
-    <body>
-        <div class="thank-you-card">
-            <div class="checkmark">🎉</div>
-            <h1>Thank You for Your Support!</h1>
-            <p>You are now an official <strong>Spruce Grove Gazette Supporter</strong>.</p>
-            <p>Your contribution helps keep local journalism alive in Spruce Grove and Parkland County.</p>
-            <p><small>A confirmation has been sent to your email.</small></p>
-            <a href="/" class="btn">← Back to Gazette</a>
-        </div>
+    <head><title>Thank You! - Spruce Grove Gazette</title></head>
+    <body style="font-family:Georgia;text-align:center;padding:50px;background:#f9f9f5;">
+        <h1 style="color:#1a3d1a;">🎉 Thank You for Your Support!</h1>
+        <p>You are now an official Spruce Grove Gazette Supporter.</p>
+        <p>Your contribution helps keep local journalism alive in Spruce Grove and Parkland County.</p>
+        <p>You'll receive a confirmation email shortly.</p>
+        <a href="/" style="color:#1a3d1a;font-weight:bold;">← Back to Gazette</a>
     </body>
     </html>
     '''
