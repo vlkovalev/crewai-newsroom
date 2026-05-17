@@ -601,7 +601,7 @@ def generate_daily_articles():
 # APP STARTUP
 # ──────────────────────────────────────────────
 
-def create_app():
+def create_app(start_scheduler=True):
     with app.app_context():
         db.create_all()
         # Seed sample data if empty
@@ -620,17 +620,18 @@ def create_app():
             db.session.add(sample)
             db.session.commit()
 
-    scheduler = BackgroundScheduler()
-    scheduler.add_job(cleanup_expired, 'interval', hours=24)
-    scheduler.add_job(generate_daily_articles, 'cron', hour=6, minute=0)  # 6 AM UTC daily
-    scheduler.start()
+    if start_scheduler:
+        scheduler = BackgroundScheduler()
+        scheduler.add_job(cleanup_expired, 'interval', hours=24)
+        scheduler.add_job(generate_daily_articles, 'cron', hour=6, minute=0)  # 6 AM UTC daily
+        scheduler.start()
 
-    # Generate articles immediately if the DB is nearly empty (must be inside app context)
-    with app.app_context():
-        if Article.query.count() <= 1:
-            import threading
-            t = threading.Thread(target=generate_daily_articles, daemon=True)
-            t.start()
+        # Generate articles immediately if the DB is nearly empty (must be inside app context)
+        with app.app_context():
+            if Article.query.count() <= 1:
+                import threading
+                t = threading.Thread(target=generate_daily_articles, daemon=True)
+                t.start()
 
     return app
 
