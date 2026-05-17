@@ -1,644 +1,1791 @@
-"""
-Spruce Grove Gazette v2 — Flask + SQLAlchemy + Blueprints
-Run: python web_app.py
-"""
-
 import os
-import json
+import sqlite3
 import requests
-from datetime import datetime, timedelta
-from flask import (Flask, render_template, request, redirect, url_for,
-                   session, flash, jsonify, abort)
-from flask_sqlalchemy import SQLAlchemy
+import json
+import traceback
+import random
+from datetime import datetime, date, timedelta
+from flask import Flask, request, jsonify, redirect, render_template_string
+from werkzeug.utils import secure_filename
+# Add these lines
 from apscheduler.schedulers.background import BackgroundScheduler
-from dotenv import load_dotenv
-
-load_dotenv()
+from apscheduler.triggers.cron import CronTrigger
 
 app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-change-me')
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///gazette_v2.db')
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.secret_key = os.environ.get('SECRET_KEY', 'spruce-grove-gazette-secret-key-2026')
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
-db = SQLAlchemy(app)
+NEWSPAPER_NAME = "The Spruce Grove Gazette"
+LAUNCH_DATE = "April 2026"
+UPLOAD_FOLDER = 'static/uploads'
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 
-# ──────────────────────────────────────────────
-# MODELS
-# ──────────────────────────────────────────────
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-class Article(db.Model):
-    __tablename__ = 'articles'
-    id          = db.Column(db.Integer, primary_key=True)
-    title       = db.Column(db.String(200), nullable=False)
-    slug        = db.Column(db.String(200), unique=True, nullable=False)
-    body        = db.Column(db.Text, nullable=False)
-    summary     = db.Column(db.String(400), default='')
-    category    = db.Column(db.String(60), default='News')
-    image_url   = db.Column(db.String(400), default='')
-    author      = db.Column(db.String(100), default='Staff')
-    published   = db.Column(db.Boolean, default=True)
-    created_at  = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at  = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+# API Keys from environment variables
+PAYPAL_CLIENT_ID = os.environ.get('PAYPAL_CLIENT_ID', 'sb')
+OPENWEATHER_API_KEY = os.environ.get('OPENWEATHER_API_KEY', '')
 
-    def __repr__(self):
-        return f'<Article {self.slug}>'
+DB_PATH = 'gazette.db'
 
+def init_database():
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    # Create all tables
+    cursor.execute('''CREATE TABLE IF NOT EXISTS subscribers (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT UNIQUE, name TEXT, 
+        subscribed_date DATE, active BOOLEAN DEFAULT 1, neighborhood TEXT)''')
+    
+    cursor.execute('''CREATE TABLE IF NOT EXISTS supporters (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT UNIQUE, name TEXT, 
+        tier TEXT, amount INTEGER, start_date DATE, active BOOLEAN DEFAULT 1, 
+        paypal_subscription_id TEXT, transaction_id TEXT)''')
+    
+    cursor.execute('''CREATE TABLE IF NOT EXISTS news_articles (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, content TEXT, 
+        summary TEXT, source TEXT, author TEXT, date DATETIME, category TEXT, 
+        featured BOOLEAN DEFAULT 0, active BOOLEAN DEFAULT 1, 
+        url TEXT, image_url TEXT, views INTEGER DEFAULT 0)''')
+    
+    cursor.execute('''CREATE TABLE IF NOT EXISTS events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, description TEXT, 
+        date DATE, time TEXT, location TEXT, ticket_price TEXT, 
+        total_tickets INTEGER, tickets_sold INTEGER DEFAULT 0, 
+        organizer TEXT, email TEXT, approved BOOLEAN DEFAULT 1, 
+        date_submitted DATE, recurring TEXT, expiry_date DATE)''')
+    
+    cursor.execute('''CREATE TABLE IF NOT EXISTS classifieds (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, category TEXT, title TEXT, 
+        description TEXT, price TEXT, contact TEXT, email TEXT, phone TEXT, 
+        photo TEXT, featured BOOLEAN DEFAULT 0, date DATE, expiry_date DATE, 
+        renewed_count INTEGER DEFAULT 0, active BOOLEAN DEFAULT 1)''')
+    
+    cursor.execute('''CREATE TABLE IF NOT EXISTS businesses (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, category TEXT, 
+        description TEXT, address TEXT, phone TEXT, email TEXT, website TEXT, 
+        logo TEXT, featured BOOLEAN DEFAULT 0, approved BOOLEAN DEFAULT 1, 
+        date DATE, views INTEGER DEFAULT 0)''')
+    
+    cursor.execute('''CREATE TABLE IF NOT EXISTS news_tips (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, email TEXT, tip TEXT, 
+        category TEXT, date DATE, status TEXT DEFAULT 'pending')''')
+    
+    cursor.execute('''CREATE TABLE IF NOT EXISTS photo_submissions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, email TEXT, title TEXT, 
+        caption TEXT, filename TEXT, date DATE, approved BOOLEAN DEFAULT 0)''')
+    
+    cursor.execute('''CREATE TABLE IF NOT EXISTS ad_inquiries (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, business_name TEXT, contact_name TEXT, 
+        email TEXT, phone TEXT, package_interest TEXT, message TEXT, 
+        date DATE, status TEXT DEFAULT 'new')''')
+    
+    cursor.execute('''CREATE TABLE IF NOT EXISTS payments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT, name TEXT, 
+        amount INTEGER, tier TEXT, transaction_id TEXT, 
+        payment_date DATE, status TEXT DEFAULT 'completed')''')
+    
+    # Add missing columns if needed
+    try:
+        cursor.execute("ALTER TABLE events ADD COLUMN recurring TEXT")
+    except: pass
+    try:
+        cursor.execute("ALTER TABLE events ADD COLUMN expiry_date DATE")
+    except: pass
+    try:
+        cursor.execute("ALTER TABLE classifieds ADD COLUMN expiry_date DATE")
+    except: pass
+    try:
+        cursor.execute("ALTER TABLE classifieds ADD COLUMN renewed_count INTEGER DEFAULT 0")
+    except: pass
+    
+    cursor.execute("UPDATE classifieds SET expiry_date = date('now', '+30 days') WHERE expiry_date IS NULL")
+    
+    # NO SAMPLE DATA - Start with empty tables!
+    # No fake businesses, no fake ads, no fake events, no fake news
+    
+    conn.commit()
+    conn.close()
 
-class Event(db.Model):
-    __tablename__ = 'events'
-    id          = db.Column(db.Integer, primary_key=True)
-    title       = db.Column(db.String(200), nullable=False)
-    description = db.Column(db.Text, default='')
-    location    = db.Column(db.String(200), default='')
-    start_date  = db.Column(db.DateTime, nullable=False)
-    end_date    = db.Column(db.DateTime)
-    category    = db.Column(db.String(60), default='Community')
-    contact     = db.Column(db.String(200), default='')
-    approved    = db.Column(db.Boolean, default=False)
-    created_at  = db.Column(db.DateTime, default=datetime.utcnow)
+def get_weather_icon(icon_code):
+    icon_map = {
+        "01d": "☀️", "01n": "🌙", "02d": "⛅", "02n": "☁️",
+        "03d": "☁️", "03n": "☁️", "04d": "☁️", "04n": "☁️",
+        "09d": "🌧️", "09n": "🌧️", "10d": "🌦️", "10n": "🌧️",
+        "11d": "⛈️", "11n": "⛈️", "13d": "❄️", "13n": "❄️",
+        "50d": "🌫️", "50n": "🌫️"
+    }
+    return icon_map.get(icon_code, "🌡️")
 
-
-class Classified(db.Model):
-    __tablename__ = 'classifieds'
-    id          = db.Column(db.Integer, primary_key=True)
-    title       = db.Column(db.String(200), nullable=False)
-    body        = db.Column(db.Text, nullable=False)
-    category    = db.Column(db.String(60), default='General')
-    price       = db.Column(db.String(50), default='')
-    contact     = db.Column(db.String(200), default='')
-    approved    = db.Column(db.Boolean, default=False)
-    expires_at  = db.Column(db.DateTime, default=lambda: datetime.utcnow() + timedelta(days=30))
-    created_at  = db.Column(db.DateTime, default=datetime.utcnow)
-
-
-class Business(db.Model):
-    __tablename__ = 'businesses'
-    id          = db.Column(db.Integer, primary_key=True)
-    name        = db.Column(db.String(200), nullable=False)
-    category    = db.Column(db.String(60), default='General')
-    description = db.Column(db.Text, default='')
-    address     = db.Column(db.String(300), default='')
-    phone       = db.Column(db.String(30), default='')
-    website     = db.Column(db.String(300), default='')
-    email       = db.Column(db.String(200), default='')
-    logo_url    = db.Column(db.String(400), default='')
-    approved    = db.Column(db.Boolean, default=False)
-    tier        = db.Column(db.String(20), default='free')  # free / supporter / featured
-    created_at  = db.Column(db.DateTime, default=datetime.utcnow)
-
-
-class Subscriber(db.Model):
-    __tablename__ = 'subscribers'
-    id          = db.Column(db.Integer, primary_key=True)
-    email       = db.Column(db.String(200), unique=True, nullable=False)
-    name        = db.Column(db.String(100), default='')
-    active      = db.Column(db.Boolean, default=True)
-    tier        = db.Column(db.String(20), default='free')
-    paypal_sub  = db.Column(db.String(100), default='')
-    created_at  = db.Column(db.DateTime, default=datetime.utcnow)
-
-
-# ──────────────────────────────────────────────
-# HELPERS
-# ──────────────────────────────────────────────
+def get_weather_forecast():
+    if OPENWEATHER_API_KEY:
+        try:
+            forecast_url = f"https://api.openweathermap.org/data/2.5/forecast?q=Spruce Grove,CA&appid={OPENWEATHER_API_KEY}&units=metric"
+            forecast_resp = requests.get(forecast_url, timeout=10)
+            forecast_data = forecast_resp.json()
+            
+            forecast = []
+            seen_days = set()
+            for item in forecast_data['list']:
+                date_str = item['dt_txt'].split()[0]
+                if date_str not in seen_days and len(forecast) < 5:
+                    seen_days.add(date_str)
+                    forecast.append({
+                        "day": datetime.strptime(date_str, '%Y-%m-%d').strftime('%a'),
+                        "high": round(item['main']['temp_max']),
+                        "low": round(item['main']['temp_min']),
+                        "condition": item['weather'][0]['description'].title(),
+                        "icon": get_weather_icon(item['weather'][0]['icon'])
+                    })
+            return forecast
+        except Exception as e:
+            print(f"Forecast API error: {e}")
+    
+    return [
+        {"day": "Mon", "high": 20, "low": 8, "condition": "Sunny", "icon": "☀️"},
+        {"day": "Tue", "high": 22, "low": 10, "condition": "Partly Cloudy", "icon": "⛅"},
+        {"day": "Wed", "high": 19, "low": 9, "condition": "Light Rain", "icon": "🌧️"},
+        {"day": "Thu", "high": 21, "low": 11, "condition": "Sunny", "icon": "☀️"},
+        {"day": "Fri", "high": 23, "low": 12, "condition": "Sunny", "icon": "☀️"}
+    ]
 
 def get_weather():
-    key = os.environ.get('OPENWEATHER_API_KEY', '')
-    if not key:
-        return None
-    try:
-        r = requests.get(
-            'https://api.openweathermap.org/data/2.5/weather',
-            params={'q': 'Spruce Grove,CA', 'appid': key, 'units': 'metric'},
-            timeout=4
-        )
-        if r.status_code == 200:
-            d = r.json()
-            return {
-                'temp': round(d['main']['temp']),
-                'feels': round(d['main']['feels_like']),
-                'desc': d['weather'][0]['description'].title(),
-                'icon': d['weather'][0]['icon'],
-            }
-    except Exception:
-        pass
+    if OPENWEATHER_API_KEY:
+        try:
+            url = f"https://api.openweathermap.org/data/2.5/weather?q=Spruce Grove,CA&appid={OPENWEATHER_API_KEY}&units=metric"
+            response = requests.get(url, timeout=10)
+            data = response.json()
+            if response.status_code == 200 and 'main' in data:
+                current = {
+                    "temp": round(data['main']['temp']),
+                    "feels_like": round(data['main']['feels_like']),
+                    "condition": data['weather'][0]['description'].title(),
+                    "humidity": data['main']['humidity'],
+                    "wind": round(data['wind']['speed']),
+                    "pressure": data['main']['pressure'],
+                    "uv": 5,
+                    "visibility": round(data.get('visibility', 10000) / 1000),
+                    "icon": get_weather_icon(data['weather'][0]['icon'])
+                }
+                return current
+        except Exception as e:
+            print(f"Weather API error: {e}")
+    
+    return {
+        "temp": 18, "feels_like": 17, "condition": "Partly Cloudy", 
+        "humidity": 65, "wind": 15, "pressure": 1012, "uv": 5, 
+        "visibility": 16, "icon": "🌤️"
+    }
+
+def get_news_articles(limit=10):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, title, summary, source, date, category, views FROM news_articles WHERE active = 1 ORDER BY date DESC LIMIT ?", (limit,))
+    articles = cursor.fetchall()
+    conn.close()
+    return [{"id": a[0], "title": a[1], "summary": a[2], "source": a[3], "date": a[4], "category": a[5], "views": a[6]} for a in articles]
+
+def get_article_by_id(article_id):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, title, content, summary, source, author, date, category FROM news_articles WHERE id = ? AND active = 1", (article_id,))
+    article = cursor.fetchone()
+    if article:
+        cursor.execute("UPDATE news_articles SET views = views + 1 WHERE id = ?", (article_id,))
+        conn.commit()
+    conn.close()
+    if article:
+        return {"id": article[0], "title": article[1], "content": article[2], "summary": article[3], 
+                "source": article[4], "author": article[5], "date": article[6], "category": article[7]}
     return None
 
+def get_events(limit=12):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT title, description, date, time, location, ticket_price FROM events WHERE approved = 1 AND date >= date('now') ORDER BY date LIMIT ?", (limit,))
+    events = cursor.fetchall()
+    conn.close()
+    return [{"title": e[0], "description": e[1], "date": e[2], "time": e[3], "location": e[4], "ticket_price": e[5]} for e in events]
 
-def admin_required():
-    if not session.get('admin'):
-        abort(403)
+def get_businesses(limit=6):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT name, category, description, phone, website FROM businesses WHERE approved = 1 LIMIT ?", (limit,))
+    businesses = cursor.fetchall()
+    conn.close()
+    # Return empty list if no businesses - NO fake businesses
+    return [{"name": b[0], "category": b[1], "description": b[2], "phone": b[3], "website": b[4]} for b in businesses]
 
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-def slugify(text):
-    import re
-    text = text.lower().strip()
-    text = re.sub(r'[^\w\s-]', '', text)
-    text = re.sub(r'[\s_-]+', '-', text)
-    text = re.sub(r'^-+|-+$', '', text)
-    return text
+def get_db():
+    """Return a sqlite3 connection with row_factory set so columns are accessible by name."""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
 
+# Initialize database
+init_database()
 
-# ──────────────────────────────────────────────
-# PUBLIC ROUTES
-# ──────────────────────────────────────────────
+# ============= AUTO NEWS UPDATER =============
+def scheduled_news_update():
+    """Function that runs at scheduled times to fetch news"""
+    print(f"[{datetime.now()}] 📰 Running scheduled news update...")
+    
+    try:
+        # Import your news gatherer
+        from news_gatherer_real import RealNewsGatherer
+        gatherer = RealNewsGatherer()
+        count = gatherer.gather_all_news()
+        print(f"[{datetime.now()}] ✅ News update complete! Added {count} articles")
+        return count
+    except Exception as e:
+        print(f"[{datetime.now()}] ❌ News update error: {e}")
+        return 0
+
+if os.environ.get('SCHEDULER_ENABLED', '1') == '1':
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(
+        func=scheduled_news_update,
+        trigger=CronTrigger(hour=6, minute=0),
+        id='daily_news_update',
+        name='Daily News Update at 6 AM'
+    )
+    scheduler.add_job(
+        func=scheduled_news_update,
+        trigger=CronTrigger(hour=12, minute=0),
+        id='noon_news_update',
+        name='Noon News Update'
+    )
+    scheduler.start()
+    print("Auto-news scheduler started - will update at 6 AM and 12 PM daily")
+# ============= END AUTO NEWS UPDATER =============
+
+# ============= ROUTES =============
 
 @app.route('/')
-def index():
-    articles = Article.query.filter_by(published=True)\
-                            .order_by(Article.created_at.desc())\
-                            .limit(12).all()
-    events = Event.query.filter(
-        Event.approved == True,
-        Event.start_date >= datetime.utcnow()
-    ).order_by(Event.start_date).limit(5).all()
-    weather = get_weather()
-    return render_template('index.html',
-                           articles=articles,
-                           events=events,
-                           weather=weather)
+def home():
+    try:
+        weather = get_weather()
+        forecast = get_weather_forecast()
+        events = get_events(6)
+        businesses = get_businesses(3)
+        news_articles = get_news_articles(6)
+        
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("SELECT title, description, price, contact, date, category FROM classifieds WHERE active = 1 AND expiry_date >= date('now') ORDER BY date DESC LIMIT 3")
+        classifieds_list = cursor.fetchall()
+        conn.close()
+        
+        # Build forecast HTML
+        forecast_html = ""
+        for f in forecast:
+            forecast_html += f'<div class="forecast-card"><div class="forecast-day">{f["day"]}</div><div class="forecast-icon">{f["icon"]}</div><div class="forecast-temp">{f["high"]}° / {f["low"]}°</div></div>'
+        
+        # Build events HTML
+        events_html = ""
+        if events:
+            for e in events[:3]:
+                events_html += f'<li class="event-item"><strong>{e["title"]}</strong><br><i class="fas fa-calendar-alt"></i> {e["date"]} at {e["time"]}<br><i class="fas fa-map-marker-alt"></i> {e["location"]}</li>'
+        else:
+            events_html = '<li>No upcoming events. <a href="/events/create">Create one!</a></li>'
+        
+        # Build news HTML
+        news_html = ""
+        if news_articles:
+            for a in news_articles[:3]:
+                news_html += f'<div class="news-item"><div class="news-category">{a["category"]}</div><h3><a href="/article/{a["id"]}">{a["title"]}</a></h3><div class="news-meta"><i class="fas fa-calendar-alt"></i> {a["date"][:10] if a["date"] else "Recent"}</div><p>{a["summary"][:150]}...</p><a href="/article/{a["id"]}" class="read-more">Read Full Story →</a></div>'
+        else:
+            news_html = '<p>No news articles yet. Check back soon!</p>'
+        
+        # Build classifieds HTML
+        classifieds_html = ""
+        if classifieds_list:
+            for c in classifieds_list:
+                classifieds_html += f'<div class="classified-item"><span class="classified-category-badge">{c[5].upper() if c[5] else "GENERAL"}</span><strong>{c[0]}</strong><p>{c[1][:80]}...</p><div class="classified-price">{c[2] if c[2] else "Call for price"}</div></div>'
+        else:
+            classifieds_html = '<p>No classifieds yet. <a href="/post-ad">Post an ad</a></p>'
+        
+        # Build businesses HTML
+        businesses_html = ""
+        if businesses:
+            for b in businesses[:3]:
+                businesses_html += f'<div class="business-card"><h4>{b["name"]}</h4><div class="business-category">{b["category"]}</div><p>{b["description"][:100]}...</p><div class="business-contact"><i class="fas fa-phone"></i> {b["phone"]}</div></div>'
+        else:
+            businesses_html = '<p>No businesses listed yet. <a href="/submit-business">Add your business</a></p>'
+        
+        return f'''
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <title>{NEWSPAPER_NAME}</title>
+            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+            <style>
+                :root {{--primary:#1a3d1a;--primary-light:#2C5F2D;--accent:#D4A017;}}
+                * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+                body {{ font-family: 'Georgia', serif; background: #f9f9f5; }}
+                .top-bar {{ background: var(--primary); color: white; font-size: 11px; padding: 8px 0; text-align: center; }}
+                .header {{ background: white; padding: 25px 20px; text-align: center; border-bottom: 3px solid var(--accent); }}
+                .logo h1 {{ font-size: 44px; color: var(--primary); }}
+                .logo p {{ font-size: 12px; color: #666; letter-spacing: 2px; }}
+                .date-header {{ background: #f0f0e8; padding: 8px; text-align: center; font-size: 13px; }}
+                .nav {{ background: var(--primary); padding: 12px; text-align: center; position: sticky; top: 0; overflow-x: auto; white-space: nowrap; z-index: 100; }}
+                .nav a {{ color: white; margin: 0 12px; text-decoration: none; text-transform: uppercase; font-size: 12px; font-weight: bold; display: inline-block; }}
+                .nav a:hover {{ color: var(--accent); }}
+                .hero {{ background: linear-gradient(135deg, #1a3d1a, #2C5F2D); color: white; padding: 40px 20px; text-align: center; }}
+                .hero h2 {{ font-size: 32px; }}
+                .search-bar {{ max-width: 500px; margin: 20px auto 0; display: flex; gap: 10px; }}
+                .search-bar input {{ flex: 1; padding: 12px; border: none; border-radius: 5px; }}
+                .search-bar button {{ background: var(--accent); color: var(--primary); padding: 12px 20px; border: none; border-radius: 5px; cursor: pointer; }}
+                .quick-links {{ display: flex; justify-content: center; gap: 15px; flex-wrap: wrap; margin: 30px 0; }}
+                .quick-link {{ background: white; padding: 12px 25px; border-radius: 30px; text-decoration: none; color: var(--primary); font-weight: bold; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }}
+                .quick-link:hover {{ background: var(--accent); transform: translateY(-2px); }}
+                .main-content {{ max-width: 1200px; margin: 0 auto; padding: 30px 20px; }}
+                .stats {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 40px; }}
+                .stat-card {{ background: white; padding: 25px; text-align: center; border-radius: 10px; cursor: pointer; transition: all 0.3s; }}
+                .stat-card:hover {{ transform: translateY(-5px); box-shadow: 0 5px 20px rgba(0,0,0,0.1); }}
+                .stat-card i {{ font-size: 32px; color: var(--accent); margin-bottom: 10px; }}
+                .stat-number {{ font-size: 32px; font-weight: bold; color: var(--primary); }}
+                .weather-widget {{ background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); border-radius: 20px; padding: 25px; color: white; margin-bottom: 30px; }}
+                .forecast-grid {{ display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-top: 15px; }}
+                .forecast-card {{ background: rgba(255,255,255,0.15); border-radius: 12px; padding: 10px; text-align: center; }}
+                .forecast-day {{ font-size: 12px; font-weight: bold; }}
+                .forecast-icon {{ font-size: 28px; margin: 8px 0; }}
+                .forecast-temp {{ font-size: 14px; font-weight: bold; }}
+                .featured-article {{ background: white; border-radius: 15px; padding: 30px; margin-bottom: 40px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }}
+                .featured-badge {{ display: inline-block; background: var(--accent); color: var(--primary); padding: 4px 12px; border-radius: 15px; font-size: 11px; margin-bottom: 15px; }}
+                .section-title {{ font-size: 22px; color: var(--primary); border-left: 4px solid var(--accent); padding-left: 15px; margin: 30px 0 20px; }}
+                .news-grid {{ display: grid; grid-template-columns: repeat(2, 1fr); gap: 25px; margin-bottom: 40px; }}
+                .news-item {{ background: white; border-radius: 10px; padding: 20px; transition: transform 0.3s; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }}
+                .news-item:hover {{ transform: translateY(-3px); }}
+                .news-category {{ display: inline-block; background: var(--primary-light); color: white; padding: 2px 10px; border-radius: 12px; font-size: 10px; margin-bottom: 10px; }}
+                .read-more {{ color: var(--accent); font-size: 13px; font-weight: bold; text-decoration: none; display: inline-block; margin-top: 10px; }}
+                .two-column {{ display: grid; grid-template-columns: 2fr 1fr; gap: 30px; margin-bottom: 40px; }}
+                .business-grid {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin: 20px 0; }}
+                .business-card {{ background: white; border-radius: 10px; padding: 20px; transition: all 0.3s; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }}
+                .business-card:hover {{ transform: translateY(-5px); }}
+                .business-category {{ display: inline-block; background: var(--accent); color: var(--primary); padding: 2px 8px; border-radius: 15px; font-size: 10px; margin: 8px 0; }}
+                .business-contact {{ font-size: 12px; margin-top: 10px; color: #666; }}
+                .classified-item {{ border-bottom: 1px solid #eee; padding: 15px 0; }}
+                .classified-category-badge {{ display: inline-block; background: var(--accent); color: var(--primary); padding: 2px 8px; border-radius: 12px; font-size: 10px; font-weight: bold; margin-right: 10px; }}
+                .classified-price {{ color: var(--accent); font-weight: bold; margin: 8px 0; }}
+                .btn {{ display: inline-block; background: var(--primary); color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 15px; transition: all 0.3s; border: none; cursor: pointer; }}
+                .btn:hover {{ transform: translateY(-2px); background: #0d260d; }}
+                .ad-spot {{ background: linear-gradient(135deg, #fff8e1, #ffe082); border: 2px dashed var(--accent); border-radius: 10px; padding: 25px; text-align: center; margin: 30px 0; cursor: pointer; transition: all 0.3s; }}
+                .ad-spot:hover {{ transform: scale(1.02); }}
+                .newsletter {{ background: linear-gradient(135deg, var(--primary), #0d260d); color: white; padding: 40px; border-radius: 15px; text-align: center; margin: 40px 0; }}
+                .newsletter input, .newsletter select {{ padding: 12px; width: 250px; border: none; border-radius: 5px; margin: 10px; }}
+                .newsletter button {{ background: var(--accent); color: var(--primary); padding: 12px 25px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }}
+                .footer {{ background: #0d260d; color: white; text-align: center; padding: 40px 20px; margin-top: 40px; }}
+                .footer-content {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 30px; max-width: 1200px; margin: 0 auto; }}
+                .footer-column a {{ color: #ccc; text-decoration: none; display: block; margin-bottom: 8px; font-size: 13px; }}
+                .footer-column a:hover {{ color: var(--accent); }}
+                .dark-mode-toggle {{ position: fixed; bottom: 20px; right: 20px; background: var(--primary); color: white; border: none; border-radius: 50px; padding: 12px 18px; cursor: pointer; z-index: 1000; }}
+                body.dark-mode {{ background: #1a1a2e; color: #eee; }}
+                body.dark-mode .header, body.dark-mode .featured-article, body.dark-mode .news-item, body.dark-mode .business-card, body.dark-mode .stat-card {{ background: #16213e; color: #eee; }}
+                @media (max-width: 768px) {{ .stats, .news-grid, .two-column, .business-grid {{ grid-template-columns: 1fr; }} .footer-content {{ grid-template-columns: repeat(2, 1fr); }} }}
+            </style>
+        </head>
+        <body>
+            <div class="top-bar"><i class="fas fa-leaf"></i> Serving Spruce Grove, Stony Plain & Parkland County | "Your Hometown, Online."</div>
+            <div class="header"><div class="logo"><h1><i class="fas fa-newspaper"></i> {NEWSPAPER_NAME}</h1><p>ESTABLISHED {LAUNCH_DATE} | INDEPENDENT & LOCAL</p></div></div>
+            <div class="date-header"><i class="fas fa-map-marker-alt"></i> Spruce Grove, Alberta | {datetime.now().strftime('%A, %B %d, %Y')}</div>
+            <div class="nav">
+                <a href="/"><i class="fas fa-home"></i> HOME</a>
+                <a href="/news"><i class="fas fa-newspaper"></i> NEWS</a>
+                <a href="/events"><i class="fas fa-calendar-alt"></i> EVENTS</a>
+                <a href="/classifieds"><i class="fas fa-list"></i> CLASSIFIEDS</a>
+                <a href="/business-directory"><i class="fas fa-store"></i> BUSINESSES</a>
+                <a href="/foodbank"><i class="fas fa-hand-holding-heart"></i> FOOD BANK</a>
+                <a href="/advertise"><i class="fas fa-bullhorn"></i> ADVERTISE</a>
+                <a href="/support" style="background:#D4A017;color:#1a3d1a;padding:5px 12px;border-radius:20px;"><i class="fas fa-star"></i> SUPPORT</a>
+            </div>
+            <div class="hero">
+                <h2>Your Hometown, Online.</h2>
+                <p>Serving Spruce Grove, Stony Plain & Parkland County</p>
+                <form class="search-bar" action="/search" method="GET">
+                    <input type="text" name="q" placeholder="Search news, events, businesses...">
+                    <button type="submit"><i class="fas fa-search"></i> Search</button>
+                </form>
+            </div>
+            <div class="quick-links">
+                <a href="/submit-tip" class="quick-link"><i class="fas fa-lightbulb"></i> News Tip</a>
+                <a href="/submit-photo" class="quick-link"><i class="fas fa-camera"></i> Share Photo</a>
+                <a href="/business-directory" class="quick-link"><i class="fas fa-store"></i> Shop Local</a>
+                <a href="/events" class="quick-link"><i class="fas fa-calendar-week"></i> Events</a>
+                <a href="/classifieds" class="quick-link"><i class="fas fa-tags"></i> Buy & Sell</a>
+            </div>
+            <div class="main-content">
+                <div class="stats">
+                    <div class="stat-card" onclick="location.href='/news'"><i class="fas fa-newspaper"></i><div class="stat-number">{len(news_articles)}+</div><div>Local Stories</div></div>
+                    <div class="stat-card" onclick="location.href='/business-directory'"><i class="fas fa-store"></i><div class="stat-number">{len(businesses)}+</div><div>Businesses</div></div>
+                    <div class="stat-card" onclick="location.href='/subscribe'"><i class="fas fa-users"></i><div class="stat-number">500+</div><div>Subscribers</div></div>
+                    <div class="stat-card" onclick="location.href='/events'"><i class="fas fa-calendar-alt"></i><div class="stat-number">{len(events)}+</div><div>Events</div></div>
+                </div>
+                
+                <div class="weather-widget">
+                    <div style="display:flex;justify-content:space-between">
+                        <div><i class="fas fa-map-marker-alt"></i> Spruce Grove, AB</div>
+                        <div class="weather-temp-large">{weather['temp']}°C</div>
+                    </div>
+                    <div style="text-align:center;margin:15px 0">
+                        <div style="font-size:64px">{weather['icon']}</div>
+                        <div class="weather-condition">{weather['condition']}</div>
+                        <div>Feels like {weather['feels_like']}°C</div>
+                    </div>
+                    <div class="forecast-grid">{forecast_html}</div>
+                </div>
+                
+                <div class="featured-article">
+                    <div class="featured-badge"><i class="fas fa-star"></i> Welcome to {NEWSPAPER_NAME}</div>
+                    <h2>Your Community Newspaper</h2>
+                    <p>Welcome to The Spruce Grove Gazette - your source for local news, events, classifieds, and community information. Post your classified ads, create events, share news tips, and support local journalism.</p>
+                    <a href="/subscribe" class="btn"><i class="fas fa-envelope"></i> Subscribe to Newsletter →</a>
+                </div>
+                
+                <h2 class="section-title"><i class="fas fa-building"></i> Local News</h2>
+                <div class="news-grid">{news_html}</div>
+                
+                <div class="two-column">
+                    <div>
+                        <h2 class="section-title"><i class="fas fa-list"></i> Classifieds</h2>
+                        <div style="background:white;border-radius:10px;padding:25px;margin-bottom:30px">
+                            {classifieds_html}
+                            <div style="margin-top:15px;">
+                                <a href="/classifieds" class="btn">View All →</a>
+                                <a href="/post-ad" class="btn" style="background:var(--accent);color:var(--primary);margin-left:10px;">Post an Ad →</a>
+                            </div>
+                        </div>
+                        <h2 class="section-title"><i class="fas fa-calendar-alt"></i> Upcoming Events</h2>
+                        <div style="background:white;border-radius:10px;padding:25px;margin-bottom:30px">
+                            <ul style="list-style:none;">{events_html}</ul>
+                            <a href="/events" class="btn">View All Events →</a>
+                            <a href="/events/create" class="btn" style="background:var(--accent);color:var(--primary);margin-left:10px;"><i class="fas fa-plus"></i> Create Event</a>
+                        </div>
+                        <h2 class="section-title"><i class="fas fa-store"></i> Local Businesses</h2>
+                        <div class="business-grid">{businesses_html}</div>
+                        <div style="text-align:center;"><a href="/business-directory" class="btn">View All →</a><a href="/submit-business" class="btn" style="background:var(--accent);color:var(--primary);margin-left:10px;">Add Your Business</a></div>
+                    </div>
+                    <div>
+                        <div class="ad-spot" onclick="location.href='/advertise'">
+                            <i class="fas fa-bullhorn" style="font-size:48px;color:var(--primary)"></i>
+                            <h3>Advertise With Us</h3>
+                            <p>Reach thousands of local readers</p>
+                            <div style="font-size:28px;font-weight:bold;color:var(--accent);margin:15px 0">Starting at $100/month</div>
+                            <button class="btn">Get Started →</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="newsletter">
+                    <i class="fas fa-envelope" style="font-size:48px;margin-bottom:15px"></i>
+                    <h3>✉️ Never Miss an Edition</h3>
+                    <p>Get the Spruce Grove Gazette delivered to your inbox every morning.</p>
+                    <form action="/do-subscribe" method="POST">
+                        <input type="text" name="name" placeholder="Your name">
+                        <input type="email" name="email" placeholder="Your email" required>
+                        <select name="neighborhood">
+                            <option value="">Select your neighborhood</option>
+                            <option>Spruce Grove - Downtown</option>
+                            <option>Spruce Grove - West</option>
+                            <option>Spruce Grove - East</option>
+                            <option>Parkland County</option>
+                            <option>Stony Plain</option>
+                        </select>
+                        <button type="submit"><i class="fas fa-paper-plane"></i> Subscribe Free →</button>
+                    </form>
+                </div>
+            </div>
+            
+            <div class="footer">
+                <div class="footer-content">
+                    <div class="footer-column">
+                        <h4><i class="fas fa-newspaper"></i> The Gazette</h4>
+                        <a href="/">Home</a>
+                        <a href="/news">News</a>
+                        <a href="/classifieds">Classifieds</a>
+                        <a href="/business-directory">Business Directory</a>
+                        <a href="/subscribe">Newsletter</a>
+                    </div>
+                    <div class="footer-column">
+                        <h4><i class="fas fa-envelope"></i> Connect</h4>
+                        <a href="/submit-tip">News Tip</a>
+                        <a href="/submit-photo">Share Photo</a>
+                        <a href="/advertise">Advertise</a>
+                        <a href="mailto:editor@sprucegrovegazette.com">editor@sprucegrovegazette.com</a>
+                    </div>
+                    <div class="footer-column">
+                        <h4><i class="fas fa-hand-holding-heart"></i> Community</h4>
+                        <a href="/foodbank">Parkland Food Bank</a>
+                        <a href="/support">Become a Supporter</a>
+                        <a href="/events">Community Calendar</a>
+                    </div>
+                    <div class="footer-column">
+                        <h4><i class="fas fa-map-marked-alt"></i> Our Region</h4>
+                        <a href="#">Spruce Grove</a>
+                        <a href="#">Parkland County</a>
+                        <a href="#">Stony Plain</a>
+                    </div>
+                </div>
+                <div class="copyright"><p>© {datetime.now().year} {NEWSPAPER_NAME}</p></div>
+            </div>
+            <button class="dark-mode-toggle" onclick="toggleDarkMode()"><i class="fas fa-moon"></i> Dark Mode</button>
+            <script>
+                function toggleDarkMode() {{
+                    document.body.classList.toggle('dark-mode');
+                    localStorage.setItem('darkMode', document.body.classList.contains('dark-mode'));
+                }}
+                if(localStorage.getItem('darkMode') === 'true') {{
+                    document.body.classList.add('dark-mode');
+                }}
+            </script>
+        </body>
+        </html>
+        '''
+    except Exception as e:
+        return f"<h1>Error: {str(e)}</h1><pre>{traceback.format_exc()}</pre>", 500
 
+# ============= REMAINING ROUTES =============
 
-@app.route('/article/<slug>')
-def article_detail(slug):
-    article = Article.query.filter_by(slug=slug, published=True).first_or_404()
-    related = Article.query.filter(
-        Article.category == article.category,
-        Article.id != article.id,
-        Article.published == True
-    ).order_by(Article.created_at.desc()).limit(3).all()
-    return render_template('article.html', article=article, related=related)
+@app.route('/news')
+def news_index():
+    articles = get_news_articles(50)
+    articles_html = ""
+    if articles:
+        for a in articles:
+            articles_html += f'''
+            <div class="news-article">
+                <div class="article-category">{a["category"]}</div>
+                <h2><a href="/article/{a["id"]}">{a["title"]}</a></h2>
+                <div class="article-meta"><i class="fas fa-calendar-alt"></i> {a["date"][:10] if a["date"] else "Recent"} | <i class="fas fa-newspaper"></i> {a["source"]} | <i class="fas fa-eye"></i> {a["views"]} views</div>
+                <p>{a["summary"]}...</p>
+                <a href="/article/{a["id"]}" class="read-more">Read Full Story →</a>
+            </div>
+            '''
+    else:
+        articles_html = '<p>No news articles yet. Check back soon!</p>'
+    
+    return f'''
+    <!DOCTYPE html>
+    <html>
+    <head><title>News - {NEWSPAPER_NAME}</title><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body{{font-family:Georgia;background:#f9f9f5;margin:0}}
+        .header{{background:#1a3d1a;color:white;padding:30px;text-align:center}}
+        .nav{{background:#2C5F2D;padding:12px;text-align:center}}
+        .nav a{{color:white;margin:0 15px;text-decoration:none}}
+        .container{{max-width:800px;margin:0 auto;padding:40px 20px}}
+        .news-article{{background:white;border-radius:10px;padding:30px;margin-bottom:30px;box-shadow:0 2px 5px rgba(0,0,0,0.1)}}
+        .article-category{{display:inline-block;background:#D4A017;color:#1a3d1a;padding:4px 12px;border-radius:15px;font-size:11px;margin-bottom:15px}}
+        .article-meta{{color:#666;margin:15px 0}}
+        .read-more{{color:#D4A017;font-weight:bold;text-decoration:none;display:inline-block;margin-top:15px}}
+        .btn{{background:#1a3d1a;color:white;padding:12px 24px;border-radius:5px;text-decoration:none;display:inline-block}}
+        .footer{{background:#0d260d;color:white;text-align:center;padding:30px;margin-top:40px}}
+    </style>
+    </head>
+    <body>
+        <div class="header"><h1><i class="fas fa-newspaper"></i> Spruce Grove Gazette News</h1><p>Local news that matters to you</p></div>
+        <div class="nav"><a href="/">Home</a><a href="/events">Events</a><a href="/classifieds">Classifieds</a><a href="/support">Support</a></div>
+        <div class="container">
+            <h1>Latest News</h1>
+            {articles_html}
+            <a href="/" class="btn">← Back to Home</a>
+        </div>
+        <div class="footer"><p>© {datetime.now().year} {NEWSPAPER_NAME}</p></div>
+    </body>
+    </html>
+    '''
 
-
-@app.route('/category/<cat>')
-def category(cat):
-    articles = Article.query.filter_by(published=True, category=cat)\
-                            .order_by(Article.created_at.desc()).all()
-    return render_template('category.html', articles=articles, category=cat)
-
+@app.route('/article/<int:article_id>')
+def article_page(article_id):
+    article = get_article_by_id(article_id)
+    if not article:
+        return redirect('/news')
+    
+    paragraphs = article['content'].split('\n\n')
+    formatted_content = ''.join([f'<p>{p.replace(chr(10), "<br>")}</p>' for p in paragraphs])
+    
+    return f'''
+    <!DOCTYPE html>
+    <html>
+    <head><title>{article['title']} - {NEWSPAPER_NAME}</title><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body{{font-family:Georgia;background:#f9f9f5;margin:0}}
+        .header{{background:#1a3d1a;color:white;padding:20px;text-align:center}}
+        .nav{{background:#2C5F2D;padding:12px;text-align:center}}
+        .nav a{{color:white;margin:0 15px;text-decoration:none}}
+        .container{{max-width:800px;margin:40px auto;background:white;padding:40px;border-radius:10px;box-shadow:0 4px 15px rgba(0,0,0,0.1)}}
+        .article-category{{display:inline-block;background:#1a3d1a;color:white;padding:4px 12px;border-radius:15px;font-size:11px;margin-bottom:15px}}
+        .article-title{{font-size:32px;color:#1a3d1a;margin-bottom:15px}}
+        .article-meta{{color:#666;border-bottom:1px solid #ddd;padding-bottom:15px;margin-bottom:25px}}
+        .article-content{{line-height:1.8;font-size:18px}}
+        .article-content p{{margin-bottom:20px}}
+        .btn-back{{background:#1a3d1a;color:white;padding:10px 20px;border-radius:5px;text-decoration:none;display:inline-block;margin-top:20px}}
+        .footer{{background:#0d260d;color:white;text-align:center;padding:30px;margin-top:40px}}
+    </style>
+    </head>
+    <body>
+        <div class="header"><h1>{NEWSPAPER_NAME}</h1></div>
+        <div class="nav"><a href="/">Home</a><a href="/news">News</a><a href="/events">Events</a><a href="/classifieds">Classifieds</a></div>
+        <div class="container">
+            <div><span class="article-category">{article['category']}</span></div>
+            <h1 class="article-title">{article['title']}</h1>
+            <div class="article-meta">
+                <i class="fas fa-calendar-alt"></i> {article['date'][:10] if article['date'] else "Recent"} | 
+                <i class="fas fa-user"></i> {article['author']} | 
+                <i class="fas fa-newspaper"></i> {article['source']}
+            </div>
+            <div class="article-content">{formatted_content}</div>
+            <a href="/news" class="btn-back">← Back to News</a>
+        </div>
+        <div class="footer"><p>© {datetime.now().year} {NEWSPAPER_NAME}</p></div>
+    </body>
+    </html>
+    '''
 
 @app.route('/events')
-def events():
-    upcoming = Event.query.filter(
-        Event.approved == True,
-        Event.start_date >= datetime.utcnow()
-    ).order_by(Event.start_date).all()
-    return render_template('events.html', events=upcoming)
+def events_list():
+    events = get_events(50)
+    events_html = ""
+    if events:
+        for e in events:
+            events_html += f'''
+            <div class="event-card">
+                <h2>{e["title"]}</h2>
+                <p>{e["description"]}</p>
+                <div class="event-details">
+                    <p><i class="fas fa-calendar-alt"></i> <strong>Date:</strong> {e["date"]} at {e["time"]}</p>
+                    <p><i class="fas fa-map-marker-alt"></i> <strong>Location:</strong> {e["location"]}</p>
+                    <p><i class="fas fa-ticket-alt"></i> <strong>Tickets:</strong> {e["ticket_price"] if e["ticket_price"] else "Free"}</p>
+                </div>
+            </div>
+            '''
+    else:
+        events_html = '<p>No upcoming events. <a href="/events/create">Create one!</a></p>'
+    
+    return f'''
+    <!DOCTYPE html>
+    <html>
+    <head><title>Events - {NEWSPAPER_NAME}</title><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body{{font-family:Georgia;background:#f9f9f5;margin:0}}
+        .header{{background:#1a3d1a;color:white;padding:30px;text-align:center}}
+        .nav{{background:#2C5F2D;padding:12px;text-align:center}}
+        .nav a{{color:white;margin:0 15px;text-decoration:none}}
+        .container{{max-width:800px;margin:0 auto;padding:40px 20px}}
+        .event-card{{background:white;border-radius:10px;padding:25px;margin-bottom:25px;box-shadow:0 2px 5px rgba(0,0,0,0.1)}}
+        .event-details{{margin:15px 0;padding:10px 0;border-top:1px solid #eee;border-bottom:1px solid #eee}}
+        .event-details i{{color:#D4A017;width:25px}}
+        .btn{{background:#1a3d1a;color:white;padding:12px 24px;border-radius:5px;text-decoration:none;display:inline-block}}
+        .btn-accent{{background:#D4A017;color:#1a3d1a}}
+        .footer{{background:#0d260d;color:white;text-align:center;padding:30px;margin-top:40px}}
+    </style>
+    </head>
+    <body>
+        <div class="header"><h1><i class="fas fa-calendar-alt"></i> Community Events Calendar</h1><p>Discover what's happening in Spruce Grove and Parkland County</p></div>
+        <div class="nav"><a href="/">Home</a><a href="/news">News</a><a href="/classifieds">Classifieds</a><a href="/foodbank">Food Bank</a></div>
+        <div class="container">
+            <h1>Upcoming Events</h1>
+            {events_html}
+            <div style="text-align:center;margin-top:30px">
+                <a href="/events/create" class="btn btn-accent"><i class="fas fa-plus"></i> Create Event</a>
+                <a href="/" class="btn">← Back to Home</a>
+            </div>
+        </div>
+        <div class="footer"><p>© {datetime.now().year} {NEWSPAPER_NAME}</p></div>
+    </body>
+    </html>
+    '''
 
-
-@app.route('/events/submit', methods=['GET', 'POST'])
-def submit_event():
+@app.route('/events/create', methods=['GET', 'POST'])
+def create_event():
     if request.method == 'POST':
-        ev = Event(
-            title=request.form['title'],
-            description=request.form.get('description', ''),
-            location=request.form.get('location', ''),
-            start_date=datetime.fromisoformat(request.form['start_date']),
-            end_date=datetime.fromisoformat(request.form['end_date']) if request.form.get('end_date') else None,
-            category=request.form.get('category', 'Community'),
-            contact=request.form.get('contact', ''),
-        )
-        db.session.add(ev)
-        db.session.commit()
-        flash('Event submitted! It will appear after review.', 'success')
-        return redirect(url_for('events'))
-    return render_template('submit_event.html')
-
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute('''INSERT INTO events (title, description, date, time, location, ticket_price, 
+                        total_tickets, organizer, email, date_submitted, approved)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)''',
+                      (request.form.get('title'), request.form.get('description'), request.form.get('date'),
+                       request.form.get('time'), request.form.get('location'), request.form.get('ticket_price', 'Free'),
+                       request.form.get('total_tickets'), request.form.get('organizer'), request.form.get('email'), date.today()))
+        conn.commit()
+        conn.close()
+        return '<h1>✅ Event Created Successfully!</h1><a href="/events">View Events →</a> <a href="/">Back to Home</a>'
+    
+    return '''
+    <!DOCTYPE html>
+    <html>
+    <head><title>Create Event</title><style>body{font-family:Georgia;background:#f9f9f5;padding:40px}.container{max-width:600px;margin:0 auto;background:white;padding:40px;border-radius:10px}input,textarea{width:100%;padding:10px;margin:10px 0;border:1px solid #ddd;border-radius:5px}button{background:#1a3d1a;color:white;padding:12px;border:none;border-radius:5px;cursor:pointer;width:100%}</style></head>
+    <body><div class="container"><h1><i class="fas fa-calendar-plus"></i> Create an Event</h1><form method="POST"><input type="text" name="title" placeholder="Event Title" required><textarea name="description" rows="4" placeholder="Description" required></textarea><input type="date" name="date" required><input type="text" name="time" placeholder="Time (e.g., 7 PM)" required><input type="text" name="location" placeholder="Location" required><input type="text" name="ticket_price" placeholder="Ticket price (or 'Free')"><input type="number" name="total_tickets" placeholder="Total tickets"><input type="text" name="organizer" placeholder="Organizer"><input type="email" name="email" placeholder="Contact email"><button type="submit">Create Event →</button></form><a href="/events">← Back to Events</a></div></body></html>
+    '''
 
 @app.route('/classifieds')
 def classifieds():
-    cat = request.args.get('cat', '')
-    q = Classified.query.filter(
-        Classified.approved == True,
-        Classified.expires_at >= datetime.utcnow()
-    )
-    if cat:
-        q = q.filter_by(category=cat)
-    ads = q.order_by(Classified.created_at.desc()).all()
-    cats = db.session.query(Classified.category).distinct().all()
-    return render_template('classifieds.html', ads=ads, cats=[c[0] for c in cats], selected=cat)
-
-
-@app.route('/classifieds/post', methods=['GET', 'POST'])
-def post_classified():
-    if request.method == 'POST':
-        ad = Classified(
-            title=request.form['title'],
-            body=request.form['body'],
-            category=request.form.get('category', 'General'),
-            price=request.form.get('price', ''),
-            contact=request.form.get('contact', ''),
-        )
-        db.session.add(ad)
-        db.session.commit()
-        flash('Classified posted! It will appear after review.', 'success')
-        return redirect(url_for('classifieds'))
-    return render_template('post_classified.html')
-
-
-@app.route('/directory')
-def directory():
-    cat = request.args.get('cat', '')
-    q = Business.query.filter_by(approved=True)
-    if cat:
-        q = q.filter_by(category=cat)
-    businesses = q.order_by(Business.tier.desc(), Business.name).all()
-    cats = db.session.query(Business.category).distinct().all()
-    return render_template('directory.html', businesses=businesses,
-                           cats=[c[0] for c in cats], selected=cat)
-
-
-@app.route('/directory/list', methods=['GET', 'POST'])
-def list_business():
-    if request.method == 'POST':
-        biz = Business(
-            name=request.form['name'],
-            category=request.form.get('category', 'General'),
-            description=request.form.get('description', ''),
-            address=request.form.get('address', ''),
-            phone=request.form.get('phone', ''),
-            website=request.form.get('website', ''),
-            email=request.form.get('email', ''),
-        )
-        db.session.add(biz)
-        db.session.commit()
-        flash('Business listed! It will appear after review.', 'success')
-        return redirect(url_for('directory'))
-    return render_template('list_business.html')
-
-
-@app.route('/subscribe', methods=['GET', 'POST'])
-def subscribe():
-    paypal_id = os.environ.get('PAYPAL_CLIENT_ID', '')
-    if request.method == 'POST':
-        email = request.form.get('email', '').strip().lower()
-        name = request.form.get('name', '').strip()
-        if not email:
-            flash('Email is required.', 'danger')
-            return redirect(url_for('subscribe'))
-        existing = Subscriber.query.filter_by(email=email).first()
-        if existing:
-            flash('You are already subscribed!', 'info')
-        else:
-            sub = Subscriber(email=email, name=name)
-            db.session.add(sub)
-            db.session.commit()
-            flash('Subscribed! Thank you for supporting the Gazette.', 'success')
-        return redirect(url_for('index'))
-    return render_template('subscribe.html', paypal_id=paypal_id)
-
-
-# PayPal webhook
-@app.route('/paypal/webhook', methods=['POST'])
-def paypal_webhook():
-    data = request.get_json(silent=True) or {}
-    event_type = data.get('event_type', '')
-    if event_type == 'BILLING.SUBSCRIPTION.ACTIVATED':
-        sub_id = data.get('resource', {}).get('id', '')
-        payer = data.get('resource', {}).get('subscriber', {})
-        email = payer.get('email_address', '')
-        if email:
-            existing = Subscriber.query.filter_by(email=email).first()
-            if existing:
-                existing.tier = 'supporter'
-                existing.paypal_sub = sub_id
-            else:
-                db.session.add(Subscriber(email=email, tier='supporter', paypal_sub=sub_id))
-            db.session.commit()
-    return '', 200
-
-
-# ──────────────────────────────────────────────
-# ADMIN ROUTES
-# ──────────────────────────────────────────────
-
-@app.route('/admin/login', methods=['GET', 'POST'])
-def admin_login():
-    if request.method == 'POST':
-        pw = os.environ.get('ADMIN_PASSWORD', 'admin123')
-        if request.form.get('password') == pw:
-            session['admin'] = True
-            return redirect(url_for('admin_dashboard'))
-        flash('Wrong password.', 'danger')
-    return render_template('admin/login.html')
-
-
-@app.route('/admin/logout')
-def admin_logout():
-    session.pop('admin', None)
-    return redirect(url_for('index'))
-
-
-@app.route('/admin')
-def admin_dashboard():
-    admin_required()
-    stats = {
-        'articles': Article.query.count(),
-        'events': Event.query.filter_by(approved=False).count(),
-        'classifieds': Classified.query.filter_by(approved=False).count(),
-        'businesses': Business.query.filter_by(approved=False).count(),
-        'subscribers': Subscriber.query.filter_by(active=True).count(),
+    category = request.args.get('category', 'all')
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    today = date.today()
+    
+    category_map = {'jobs': 'Jobs', 'for-sale': 'For Sale', 'housing': 'Housing', 'services': 'Services', 'garage': 'Garage Sale'}
+    
+    if category != 'all' and category in category_map:
+        cursor.execute("SELECT id, title, description, price, contact, date, category FROM classifieds WHERE active = 1 AND expiry_date >= ? AND category = ? ORDER BY date DESC", (today, category_map[category]))
+    else:
+        cursor.execute("SELECT id, title, description, price, contact, date, category FROM classifieds WHERE active = 1 AND expiry_date >= ? ORDER BY date DESC", (today,))
+    
+    items = cursor.fetchall()
+    conn.close()
+    
+    category_titles = {
+        'jobs': '💼 Job Opportunities',
+        'for-sale': '🏷️ Items For Sale', 
+        'housing': '🏠 Housing & Real Estate',
+        'services': '🔧 Local Services',
+        'garage': '🏪 Garage & Yard Sales',
+        'all': '📋 All Classifieds'
     }
-    recent = Article.query.order_by(Article.created_at.desc()).limit(5).all()
-    return render_template('admin/dashboard.html', stats=stats, recent=recent)
+    current_title = category_titles.get(category, '📋 All Classifieds')
+    
+    classifieds_html = ""
+    if items:
+        for item in items:
+            price = f'${item[3]}' if item[3] and item[3].isdigit() else (item[3] if item[3] else "Call for price")
+            category_icon = {'Jobs':'💼','For Sale':'🏷️','Housing':'🏠','Services':'🔧','Garage Sale':'🏪'}.get(item[6] if item[6] else '', '📋')
+            classifieds_html += f'''
+            <div class="classified-card">
+                <div class="classified-badge">{category_icon} {item[6] if item[6] else "General"}</div>
+                <h3>{item[1]}</h3>
+                <div class="classified-price">{price}</div>
+                <p>{item[2][:150]}...</p>
+                <div class="classified-contact"><i class="fas fa-user"></i> {item[4]} | <i class="fas fa-calendar"></i> {item[5]}</div>
+                <a href="/classified/{item[0]}" class="btn-small">View Details →</a>
+            </div>
+            '''
+    else:
+        classifieds_html = '<p style="text-align:center;padding:40px">No classifieds found. <a href="/post-ad">Post an Ad →</a></p>'
+    
+    return f'''
+    <!DOCTYPE html>
+    <html>
+    <head><title>Classifieds - {current_title}</title><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body{{font-family:Georgia;background:#f9f9f5;margin:0}}
+        .header{{background:#1a3d1a;color:white;padding:30px;text-align:center}}
+        .nav{{background:#2C5F2D;padding:12px;text-align:center}}
+        .nav a{{color:white;margin:0 15px;text-decoration:none;font-size:14px}}
+        .nav a:hover{{color:#D4A017}}
+        .container{{max-width:1200px;margin:0 auto;padding:40px 20px}}
+        .category-grid{{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-bottom:40px}}
+        .cat-card{{background:white;border-radius:15px;padding:30px 20px;text-align:center;text-decoration:none;color:#1a3d1a;box-shadow:0 4px 12px rgba(0,0,0,0.08);transition:all 0.3s;border:2px solid transparent}}
+        .cat-card:hover{{transform:translateY(-4px);border-color:#D4A017;box-shadow:0 8px 24px rgba(0,0,0,0.12)}}
+        .cat-card.active{{border-color:#1a3d1a;background:#1a3d1a;color:white}}
+        .cat-card.active .cat-icon{{color:#D4A017}}
+        .cat-icon{{font-size:36px;margin-bottom:12px;display:block;color:#D4A017}}
+        .cat-card h3{{margin:0 0 6px;font-size:16px;font-weight:bold}}
+        .cat-card p{{margin:0;font-size:12px;color:#888}}
+        .cat-card.active p{{color:#ccc}}
+        .classifieds-grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:20px;margin-top:30px}}
+        .classified-card{{background:white;border-radius:12px;padding:22px;transition:all 0.3s;box-shadow:0 2px 10px rgba(0,0,0,0.08)}}
+        .classified-card:hover{{transform:translateY(-4px);box-shadow:0 8px 24px rgba(0,0,0,0.12)}}
+        .classified-badge{{display:inline-block;background:#D4A017;color:#1a3d1a;padding:4px 12px;border-radius:20px;font-size:11px;font-weight:bold;margin-bottom:10px}}
+        .classified-price{{font-size:22px;color:#D4A017;font-weight:bold;margin:10px 0}}
+        .classified-contact{{color:#888;font-size:12px;margin:10px 0}}
+        .btn-small{{background:#1a3d1a;color:white;padding:8px 18px;border-radius:5px;text-decoration:none;display:inline-block;margin-top:10px;font-size:13px}}
+        .btn-small:hover{{background:#0d260d}}
+        .btn{{background:#1a3d1a;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;font-size:15px}}
+        .btn:hover{{background:#0d260d}}
+        .publish-btn{{background:#D4A017;color:#1a3d1a}}
+        .publish-btn:hover{{background:#c49015}}
+        .section-title{{font-size:22px;font-weight:bold;color:#1a3d1a;border-left:4px solid #D4A017;padding-left:12px;margin:30px 0 20px}}
+        .footer{{background:#0d260d;color:white;text-align:center;padding:30px;margin-top:40px}}
+        @media(max-width:768px){{.classifieds-grid{{grid-template-columns:1fr}}.category-grid{{grid-template-columns:repeat(2,1fr)}}}}
+    </style>
+    </head>
+    <body>
+        <div class="header"><h1><i class="fas fa-list"></i> Classifieds</h1><p>Buy, Sell & Connect in Spruce Grove</p></div>
+        <div class="nav">
+            <a href="/"><i class="fas fa-home"></i> Home</a>
+            <a href="/classifieds"><i class="fas fa-list"></i> All Classifieds</a>
+            <a href="/post-ad"><i class="fas fa-plus-circle"></i> Post Free Ad</a>
+            <a href="/news"><i class="fas fa-newspaper"></i> News</a>
+            <a href="/events"><i class="fas fa-calendar-alt"></i> Events</a>
+        </div>
+        <div class="container">
+            <div class="section-title"><i class="fas fa-th-large"></i> Browse by Category</div>
+            <div class="category-grid">
+                <a href="/classifieds?category=all" class="cat-card {'active' if category == 'all' else ''}">
+                    <span class="cat-icon"><i class="fas fa-border-all"></i></span>
+                    <h3>All Listings</h3><p>Browse everything</p>
+                </a>
+                <a href="/classifieds?category=jobs" class="cat-card {'active' if category == 'jobs' else ''}">
+                    <span class="cat-icon"><i class="fas fa-briefcase"></i></span>
+                    <h3>Jobs</h3><p>Careers & employment</p>
+                </a>
+                <a href="/classifieds?category=for-sale" class="cat-card {'active' if category == 'for-sale' else ''}">
+                    <span class="cat-icon"><i class="fas fa-tag"></i></span>
+                    <h3>For Sale</h3><p>Furniture, vehicles & more</p>
+                </a>
+                <a href="/classifieds?category=housing" class="cat-card {'active' if category == 'housing' else ''}">
+                    <span class="cat-icon"><i class="fas fa-home"></i></span>
+                    <h3>Housing</h3><p>Rentals & real estate</p>
+                </a>
+                <a href="/classifieds?category=services" class="cat-card {'active' if category == 'services' else ''}">
+                    <span class="cat-icon"><i class="fas fa-tools"></i></span>
+                    <h3>Services</h3><p>Local trades & professionals</p>
+                </a>
+                <a href="/classifieds?category=garage" class="cat-card {'active' if category == 'garage' else ''}">
+                    <span class="cat-icon"><i class="fas fa-warehouse"></i></span>
+                    <h3>Garage Sales</h3><p>Weekend sales & deals</p>
+                </a>
+            </div>
+            <div class="section-title"><i class="fas fa-list-ul"></i> {current_title}</div>
+            <div class="classifieds-grid">
+                {classifieds_html}
+            </div>
+            <div style="text-align:center;margin-top:40px;display:flex;justify-content:center;gap:15px;flex-wrap:wrap;">
+                <a href="/post-ad" class="btn publish-btn"><i class="fas fa-plus"></i> Post a Free Ad</a>
+                <a href="/" class="btn"><i class="fas fa-home"></i> Back to Home</a>
+            </div>
+        </div>
+        <div class="footer"><p>© {datetime.now().year} {NEWSPAPER_NAME} | <a href="/advertise" style="color:#D4A017;">Advertise With Us</a></p></div>
+    </body>
+    </html>
+    '''
 
+@app.route('/classified/<int:id>')
+def classified_detail(id):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, title, description, price, contact, email, phone, date, category FROM classifieds WHERE id = ? AND active = 1", (id,))
+    item = cursor.fetchone()
+    conn.close()
+    
+    if not item:
+        return redirect('/classifieds')
+    
+    category_icon = {'Jobs':'💼','For Sale':'🏷️','Housing':'🏠','Services':'🔧','Garage Sale':'🏪'}.get(item[8] if item[8] else '', '📋')
+    return f'''
+    <!DOCTYPE html>
+    <html>
+    <head><title>{item[1]} - Classified Ad</title><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>body{{font-family:Georgia;background:#f9f9f5;margin:0}}.container{{max-width:600px;margin:40px auto;background:white;padding:30px;border-radius:10px;box-shadow:0 4px 15px rgba(0,0,0,0.1)}}.price{{color:#D4A017;font-size:28px;font-weight:bold;margin:20px 0}}.contact{{background:#f5f5f5;padding:20px;border-radius:8px;margin:20px 0}}.btn{{background:#1a3d1a;color:white;padding:12px 24px;border-radius:5px;text-decoration:none;display:inline-block}}.badge{{display:inline-block;background:#D4A017;color:#1a3d1a;padding:5px 15px;border-radius:20px;font-size:12px;margin-bottom:15px}}</style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="badge">{category_icon} {item[8] if item[8] else "General"}</div>
+            <h1>{item[1]}</h1>
+            <div class="price">{item[3] if item[3] else "Price not specified"}</div>
+            <p>{item[2]}</p>
+            <div class="contact">
+                <h3><i class="fas fa-address-card"></i> Contact Information</h3>
+                <p><i class="fas fa-phone"></i> {item[4]}</p>
+                <p><i class="fas fa-envelope"></i> {item[5] if item[5] else "Not provided"}</p>
+                <p><i class="fas fa-mobile-alt"></i> {item[6] if item[6] else "Not provided"}</p>
+            </div>
+            <a href="/classifieds" class="btn"><i class="fas fa-arrow-left"></i> Back to Classifieds</a>
+        </div>
+    </body>
+    </html>
+    '''
 
-@app.route('/admin/articles')
-def admin_articles():
-    admin_required()
-    articles = Article.query.order_by(Article.created_at.desc()).all()
-    return render_template('admin/articles.html', articles=articles)
-
-
-@app.route('/admin/articles/new', methods=['GET', 'POST'])
-def admin_new_article():
-    admin_required()
+@app.route('/post-ad', methods=['GET', 'POST'])
+def post_ad():
     if request.method == 'POST':
-        title = request.form['title']
-        slug = slugify(title)
-        # ensure unique slug
-        base, n = slug, 1
-        while Article.query.filter_by(slug=slug).first():
-            slug = f'{base}-{n}'; n += 1
-        art = Article(
-            title=title, slug=slug,
-            body=request.form['body'],
-            summary=request.form.get('summary', ''),
-            category=request.form.get('category', 'News'),
-            image_url=request.form.get('image_url', ''),
-            author=request.form.get('author', 'Staff'),
-            published=bool(request.form.get('published')),
-        )
-        db.session.add(art)
-        db.session.commit()
-        flash('Article created.', 'success')
-        return redirect(url_for('admin_articles'))
-    categories = ['News', 'Sports', 'Arts & Culture', 'Business', 'Community', 'Opinion']
-    return render_template('admin/edit_article.html', article=None, categories=categories)
+        expiry_date = date.today() + timedelta(days=30)
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute('''INSERT INTO classifieds (category, title, description, price, contact, email, phone, date, expiry_date, active)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)''',
+                      (request.form.get('category'), request.form.get('title'), request.form.get('description'),
+                       request.form.get('price'), request.form.get('contact'), request.form.get('email'),
+                       request.form.get('phone'), date.today(), expiry_date))
+        conn.commit()
+        conn.close()
+        return '<h1>✅ Ad Posted! Expires in 30 days.</h1><a href="/classifieds">View Classifieds</a>'
+    
+    return '''
+    <!DOCTYPE html>
+    <html>
+    <head><title>Post a Free Ad</title><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"><style>body{font-family:Georgia;background:#f9f9f5;padding:40px}.container{max-width:600px;margin:0 auto;background:white;padding:40px;border-radius:15px;box-shadow:0 4px 15px rgba(0,0,0,0.1)}h1{color:#1a3d1a}input,select,textarea{width:100%;padding:12px;margin:10px 0;border:1px solid #ddd;border-radius:8px;font-family:Georgia}button{background:#1a3d1a;color:white;padding:14px;border:none;border-radius:8px;cursor:pointer;font-size:16px;width:100%}.note{background:#f0f0e8;padding:15px;border-radius:8px;margin:20px 0}</style></head>
+    <body><div class="container"><h1><i class="fas fa-plus-circle"></i> Post a Free Classified Ad</h1><p>Reach thousands of readers in Spruce Grove and Parkland County</p>
+    <form method="POST"><select name="category" required><option value="">Select Category</option><option value="Jobs">💼 Jobs</option><option value="For Sale">🏷️ For Sale</option><option value="Housing">🏠 Housing</option><option value="Services">🔧 Services</option><option value="Garage Sale">🏪 Garage Sale</option></select>
+    <input name="title" placeholder="Ad Title" required><textarea name="description" rows="5" placeholder="Description" required></textarea>
+    <input name="price" placeholder="Price (e.g., $500 or OBO)"><input name="contact" placeholder="Contact info (phone or email)" required>
+    <input name="email" placeholder="Email (optional)"><input name="phone" placeholder="Phone (optional)">
+    <button type="submit"><i class="fas fa-paper-plane"></i> Post Ad →</button></form>
+    <div class="note"><i class="fas fa-info-circle"></i> Your ad will be active for 30 days. You can renew it for free.</div>
+    <a href="/classifieds"><i class="fas fa-arrow-left"></i> Back to Classifieds</a></div></body></html>
+    '''
 
+@app.route('/foodbank')
+def foodbank():
+    return '''
+    <!DOCTYPE html>
+    <html>
+    <head><title>Parkland Food Bank - Support Our Community</title><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body{font-family:Georgia;background:#f9f9f5;margin:0}
+        .header{background:#1a3d1a;color:white;padding:40px;text-align:center}
+        .nav{background:#2C5F2D;padding:12px;text-align:center}
+        .nav a{color:white;margin:0 15px;text-decoration:none}
+        .stats-bar{background:#e74c3c;color:white;padding:30px;display:flex;justify-content:space-around;flex-wrap:wrap}
+        .stat-number{font-size:48px;font-weight:bold}
+        .container{max-width:1000px;margin:0 auto;padding:40px 20px}
+        .help-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:30px;margin:30px 0}
+        .help-card{background:white;text-align:center;padding:40px;border-radius:15px;transition:all 0.3s;box-shadow:0 4px 15px rgba(0,0,0,0.1)}
+        .help-card:hover{transform:translateY(-5px)}
+        .help-card i{font-size:48px;color:#e74c3c;margin-bottom:15px}
+        .info-section{background:white;border-radius:15px;padding:30px;margin:30px 0}
+        .wishlist{background:#fdf0e6;border-left:4px solid #e74c3c;padding:20px;margin:20px 0}
+        .btn{background:#1a3d1a;color:white;padding:12px 30px;border-radius:5px;text-decoration:none;display:inline-block;margin:10px}
+        .btn-orange{background:#e74c3c}
+        .footer{background:#0d260d;color:white;text-align:center;padding:30px;margin-top:40px}
+        @media(max-width:768px){.help-grid{grid-template-columns:1fr}}
+    </style>
+    </head>
+    <body>
+        <div class="header"><h1><i class="fas fa-hand-holding-heart"></i> Parkland Food Bank</h1><p>Nourishing Our Community Since 1984</p></div>
+        <div class="nav"><a href="/">Home</a><a href="/news">News</a><a href="/events">Events</a><a href="/support">Support</a></div>
+        <div class="stats-bar">
+            <div><div class="stat-number">40+</div>Years of Service</div>
+            <div><div class="stat-number">5,634</div>Individuals Served</div>
+            <div><div class="stat-number">31,945</div>Hampers Distributed</div>
+            <div><div class="stat-number">15%</div>Increase in Need</div>
+        </div>
+        <div class="container">
+            <div class="help-grid">
+                <div class="help-card"><i class="fas fa-apple-alt"></i><h3>Donate Food</h3><p>Drop off non-perishable food items</p><p><strong>105 Madison Crescent<br>Spruce Grove, AB</strong></p><p>Mon-Fri: 9AM-4PM</p><a href="https://maps.google.com/?q=105+Madison+Crescent+Spruce+Grove" target="_blank" class="btn"><i class="fas fa-map-marker-alt"></i> Get Directions</a></div>
+                <div class="help-card"><i class="fas fa-dollar-sign"></i><h3>Make a Donation</h3><p>Every dollar helps provide meals for families in need</p><p><strong>Tax receipts issued for donations over $20</strong></p><a href="https://parklandfoodbank.org/donate" target="_blank" class="btn btn-orange"><i class="fas fa-external-link-alt"></i> Donate Online</a></div>
+                <div class="help-card"><i class="fas fa-hands-helping"></i><h3>Volunteer</h3><p>Help sort food, pack hampers, or deliver to those in need</p><p><strong>Call 780-962-4565</strong></p><a href="https://parklandfoodbank.org/volunteer" target="_blank" class="btn"><i class="fas fa-calendar-alt"></i> Sign Up to Volunteer</a></div>
+            </div>
+            <div class="info-section">
+                <h2><i class="fas fa-info-circle"></i> About Parkland Food Bank</h2>
+                <p>The Parkland Food Bank has been serving Spruce Grove, Stony Plain, and Parkland County for over 40 years. We provide emergency food assistance to individuals and families in need, regardless of circumstances.</p>
+                <p><strong>📞 Phone:</strong> 780-962-4565<br><strong>📧 Email:</strong> info@parklandfoodbank.org<br><strong>📍 Address:</strong> 105 Madison Crescent, Spruce Grove, AB T7X 1E5</p>
+                <p><strong>⏰ Hours:</strong> Monday to Friday, 9:00 AM - 4:00 PM</p>
+            </div>
+            <div class="wishlist">
+                <h3><i class="fas fa-list"></i> Most Needed Food Items</h3>
+                <div style="display:grid; grid-template-columns:repeat(2,1fr); gap:10px; margin-top:15px">
+                    <div>🥫 Canned vegetables</div><div>🍝 Pasta and sauce</div>
+                    <div>🥫 Canned fruits</div><div>🍚 Rice and grains</div>
+                    <div>🥫 Canned soup</div><div>🥜 Peanut butter</div>
+                    <div>🥫 Canned beans</div><div>🍼 Baby formula</div>
+                    <div>🛢️ Cooking oil</div><div>🧸 Toiletries</div>
+                    <div>🥣 Cereal</div><div>🥛 Powdered milk</div>
+                </div>
+            </div>
+            <div style="text-align:center; margin-top:30px">
+                <a href="https://parklandfoodbank.org" target="_blank" class="btn btn-orange"><i class="fas fa-external-link-alt"></i> Visit Official Website</a>
+                <a href="/" class="btn"><i class="fas fa-arrow-left"></i> Back to Gazette</a>
+            </div>
+        </div>
+        <div class="footer"><p>© 2026 The Spruce Grove Gazette | Supporting Parkland Food Bank</p></div>
+    </body>
+    </html>
+    '''
 
-@app.route('/admin/articles/<int:id>/edit', methods=['GET', 'POST'])
-def admin_edit_article(id):
-    admin_required()
-    art = Article.query.get_or_404(id)
+@app.route('/support')
+def support():
+    return _support_html().replace('__PAYPAL_CLIENT_ID__', PAYPAL_CLIENT_ID)
+
+def _support_html():
+    # Get PayPal client ID from environment variable
+    paypal_client_id = os.environ.get('PAYPAL_CLIENT_ID', 'sb')
+    
+    return f'''
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Support The Spruce Grove Gazette</title>
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+        <style>
+            :root { --primary: #1a3d1a; --primary-light: #2C5F2D; --accent: #D4A017; --donate: #e74c3c; }
+            body { font-family: 'Georgia', serif; background: #f9f9f5; margin: 0; }
+            .header { background: var(--primary); color: white; padding: 40px; text-align: center; }
+            .header h1 { margin: 0; font-size: 42px; }
+            .header p { font-size: 18px; margin-top: 10px; opacity: 0.9; }
+            .container { max-width: 1200px; margin: 0 auto; padding: 50px 20px; }
+            .pricing-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 30px; margin: 50px 0; }
+            .pricing-card { background: white; border-radius: 15px; padding: 35px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.1); transition: transform 0.3s; position: relative; }
+            .pricing-card:hover { transform: translateY(-5px); }
+            .pricing-card.featured { border: 2px solid var(--accent); }
+            .pricing-card.donation-card { border: 2px solid var(--donate); background: linear-gradient(135deg, white, #fff5f5); }
+            .popular-badge { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: var(--accent); color: var(--primary); padding: 5px 20px; border-radius: 20px; font-size: 12px; font-weight: bold; white-space: nowrap; }
+            .donation-badge { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: var(--donate); color: white; padding: 5px 20px; border-radius: 20px; font-size: 12px; font-weight: bold; white-space: nowrap; }
+            .price { font-size: 48px; font-weight: bold; color: var(--primary); margin: 20px 0; }
+            .price small { font-size: 16px; font-weight: normal; color: #666; }
+            .features { list-style: none; padding: 0; text-align: left; margin: 25px 0; }
+            .features li { padding: 8px 0; border-bottom: 1px solid #eee; }
+            .features i { color: #27ae60; margin-right: 10px; width: 20px; }
+            .btn { display: inline-block; background: var(--primary); color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin-top: 20px; font-weight: bold; cursor: pointer; border: none; }
+            .btn:hover { background: #0d260d; }
+            .paypal-container { margin-top: 20px; min-height: 55px; }
+            .custom-amount { margin-top: 20px; }
+            .custom-amount input { padding: 12px; width: 150px; border: 2px solid var(--donate); border-radius: 5px; text-align: center; font-size: 18px; margin: 10px; }
+            .impact-section { background: white; border-radius: 15px; padding: 40px; text-align: center; margin-top: 50px; }
+            .impact-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 30px; margin-top: 30px; }
+            .impact-card { text-align: center; padding: 20px; }
+            .impact-card i { font-size: 48px; color: var(--accent); margin-bottom: 15px; }
+            .support-note { background: #e8f5e9; border-radius: 15px; padding: 25px; text-align: center; margin-top: 40px; }
+            .footer { background: #0d260d; color: white; text-align: center; padding: 30px; margin-top: 40px; }
+            @media (max-width: 768px) { .pricing-grid { grid-template-columns: 1fr; } .impact-grid { grid-template-columns: 1fr; } }
+        </style>
+        <script src="https://www.paypal.com/sdk/js?client-id=ARtcRWqbrpvaJo2wJNJewoyuPm0QlT6_FyP_X939IjMW7B1kWFDNw6tU5L9rnysbeBWNemj2A-ellK7BW&currency=CAD"></script>
+    </head>
+    <body>
+        <div class="header">
+            <h1>🌟 Support Local Journalism</h1>
+            <p>Help keep Spruce Grove & Parkland County informed and connected</p>
+        </div>
+        <div class="container">
+            <div class="pricing-grid">
+                <!-- Free Option -->
+                <div class="pricing-card">
+                    <h3>Free Reader</h3>
+                    <div class="price">$0</div>
+                    <ul class="features">
+                        <li><i class="fas fa-check"></i> Daily newsletter</li>
+                        <li><i class="fas fa-check"></i> Access to all articles</li>
+                        <li><i class="fas fa-check"></i> Community calendar</li>
+                        <li><i class="fas fa-check"></i> Business directory access</li>
+                    </ul>
+                    <a href="/subscribe" class="btn">Subscribe Free →</a>
+                </div>
+                
+                <!-- $5 Monthly Supporter (One-time) -->
+                <div class="pricing-card">
+                    <h3>Supporter</h3>
+                    <div class="price">$5</div>
+                    <ul class="features">
+                        <li><i class="fas fa-check"></i> All free features</li>
+                        <li><i class="fas fa-check"></i> Supporter recognition</li>
+                        <li><i class="fas fa-check"></i> Weekly exclusive content</li>
+                        <li><i class="fas fa-check"></i> Thank you acknowledgment</li>
+                    </ul>
+                    <div id="paypal-5" class="paypal-container"></div>
+                </div>
+                
+                <!-- One-Time Donation -->
+                <div class="pricing-card donation-card">
+                    <div class="donation-badge">❤️ MAKE A DONATION</div>
+                    <h3>Support Local Journalism</h3>
+                    <div class="price">$<span id="customAmountDisplay">25</span><small>/one-time</small></div>
+                    <div class="custom-amount">
+                        <input type="number" id="customAmount" min="5" max="1000" step="5" value="25">
+                        <div style="font-size:12px;color:#666;">CAD $5 - $1000</div>
+                    </div>
+                    <ul class="features">
+                        <li><i class="fas fa-check"></i> Choose your own amount</li>
+                        <li><i class="fas fa-check"></i> One-time donation</li>
+                        <li><i class="fas fa-check"></i> Supporter recognition</li>
+                        <li><i class="fas fa-check"></i> Tax receipt over $20</li>
+                    </ul>
+                    <div id="customPaypalContainer" class="paypal-container"></div>
+                </div>
+                
+                <!-- $50 Yearly Supporter (One-time) -->
+                <div class="pricing-card featured">
+                    <div class="popular-badge">⭐ BEST VALUE</div>
+                    <h3>Champion</h3>
+                    <div class="price">$50</div>
+                    <div style="font-size:14px;color:#666;margin-top:-15px;">Premium supporter</div>
+                    <ul class="features">
+                        <li><i class="fas fa-check"></i> All supporter benefits</li>
+                        <li><i class="fas fa-check"></i> Name in supporter roll</li>
+                        <li><i class="fas fa-check"></i> Gazette merch discount</li>
+                        <li><i class="fas fa-check"></i> Annual supporter event</li>
+                        <li><i class="fas fa-check"></i> Input on coverage priorities</li>
+                    </ul>
+                    <div id="paypal-50" class="paypal-container"></div>
+                </div>
+            </div>
+            
+            <div class="impact-section">
+                <h2>Your Support Makes a Difference</h2>
+                <div class="impact-grid">
+                    <div class="impact-card"><i class="fas fa-newspaper"></i><h3>$10</h3><p>Funds one day of local news coverage</p></div>
+                    <div class="impact-card"><i class="fas fa-camera"></i><h3>$25</h3><p>Supports community photo submissions for a week</p></div>
+                    <div class="impact-card"><i class="fas fa-mobile-alt"></i><h3>$50</h3><p>Keeps the Gazette free for everyone for one month</p></div>
+                </div>
+            </div>
+            
+            <div class="support-note">
+                <i class="fas fa-lock" style="margin-right:10px; color:#1a3d1a;"></i>
+                <strong>Secure payments by PayPal</strong> — Your payment information is encrypted and never stored on our servers.
+                <br><br><i class="fas fa-receipt"></i> <strong>Tax receipts available for donations over $20</strong>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p><a href="/" style="color:white;">← Back to Home</a> | <a href="/advertise" style="color:#D4A017;">Advertise</a></p>
+            <p>© 2025 The Spruce Grove Gazette | Serving Spruce Grove & Parkland County</p>
+        </div>
+        
+        <script>
+            // $5 Donation Button
+            if(document.getElementById('paypal-5')) {
+                paypal.Buttons({
+                    style: { shape: 'rect', color: 'gold', label: 'paypal', height: 40 },
+                    createOrder: function(data, actions) {
+                        return actions.order.create({
+                            purchase_units: [{
+                                amount: { value: '5.00', currency_code: 'CAD' },
+                                description: 'Spruce Grove Gazette Supporter - $5 Donation'
+                            }]
+                        });
+                    },
+                    onApprove: function(data, actions) {
+                        return actions.order.capture().then(function(details) {
+                            alert('Thank you for your $5 donation! You are now a Gazette Supporter!');
+                            window.location.href = '/support-thank-you';
+                        });
+                    },
+                    onError: function(err) {
+                        console.error(err);
+                        alert('Payment failed. Please try again.');
+                    }
+                }).render('#paypal-5');
+            }
+            
+            // $50 Donation Button
+            if(document.getElementById('paypal-50')) {
+                paypal.Buttons({
+                    style: { shape: 'rect', color: 'gold', label: 'paypal', height: 40 },
+                    createOrder: function(data, actions) {
+                        return actions.order.create({
+                            purchase_units: [{
+                                amount: { value: '50.00', currency_code: 'CAD' },
+                                description: 'Spruce Grove Gazette Champion - $50 Donation'
+                            }]
+                        });
+                    },
+                    onApprove: function(data, actions) {
+                        return actions.order.capture().then(function(details) {
+                            alert('Thank you for your $50 donation! You are now a Gazette Champion!');
+                            window.location.href = '/support-thank-you';
+                        });
+                    },
+                    onError: function(err) {
+                        console.error(err);
+                        alert('Payment failed. Please try again.');
+                    }
+                }).render('#paypal-50');
+            }
+            
+            // Custom one-time donation
+            const customInput = document.getElementById('customAmount');
+            const displaySpan = document.getElementById('customAmountDisplay');
+            
+            if(customInput) {
+                customInput.addEventListener('input', function() { 
+                    displaySpan.innerText = customInput.value; 
+                    renderCustomPaypalButton(); 
+                });
+            }
+            
+            function renderCustomPaypalButton() {
+                const amount = parseFloat(customInput ? customInput.value : 25);
+                const container = document.getElementById('customPaypalContainer');
+                if (container && amount >= 5 && amount <= 1000) {
+                    container.innerHTML = '';
+                    paypal.Buttons({
+                        style: { shape: 'rect', color: 'gold', label: 'paypal', height: 40 },
+                        createOrder: function(data, actions) {
+                            return actions.order.create({ 
+                                purchase_units: [{ 
+                                    amount: { value: amount.toFixed(2), currency_code: 'CAD' }, 
+                                    description: 'Spruce Grove Gazette Donation - $' + amount.toFixed(2)
+                                }] 
+                            });
+                        },
+                        onApprove: function(data, actions) {
+                            return actions.order.capture().then(function(details) {
+                                alert('Thank you for your generous donation of $' + amount.toFixed(2) + '!');
+                                window.location.href = '/support-thank-you';
+                            });
+                        },
+                        onError: function(err) { 
+                            console.error(err); 
+                            alert('Payment failed. Please try again.'); 
+                        }
+                    }).render('#customPaypalContainer');
+                } else if (container) {
+                    container.innerHTML = '<p style="color:#666;font-size:12px;">Enter an amount between $5 and $1000</p>';
+                }
+            }
+            
+            renderCustomPaypalButton();
+        </script>
+    </body>
+    </html>
+    '''
+@app.route('/support-thank-you')
+def support_thank_you():
+    return '''
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Thank You - Spruce Grove Gazette</title>
+        <style>
+            body { font-family: Georgia, serif; background: #f9f9f5; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+            .thank-you-card { background: white; padding: 50px; border-radius: 20px; max-width: 500px; text-align: center; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+            h1 { color: #1a3d1a; margin-bottom: 20px; }
+            .checkmark { font-size: 64px; margin-bottom: 20px; }
+            p { color: #555; line-height: 1.6; margin: 15px 0; }
+            .btn { display: inline-block; background: #1a3d1a; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin-top: 20px; }
+            .btn:hover { background: #0d260d; }
+        </style>
+    </head>
+    <body>
+        <div class="thank-you-card">
+            <div class="checkmark">🎉</div>
+            <h1>Thank You for Your Support!</h1>
+            <p>You are now an official <strong>Spruce Grove Gazette Supporter</strong>.</p>
+            <p>Your contribution helps keep local journalism alive in Spruce Grove and Parkland County.</p>
+            <p><small>A confirmation has been sent to your email.</small></p>
+            <a href="/" class="btn">← Back to Gazette</a>
+        </div>
+    </body>
+    </html>
+    '''
+
+@app.route('/advertise')
+def advertise():
+    return '''
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Advertise With Us - Spruce Grove Gazette</title>
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+        <style>
+            body { font-family: Georgia; background: #f9f9f5; margin: 0; }
+            .header { background: #1a3d1a; color: white; padding: 40px; text-align: center; }
+            .header h1 { margin: 0; font-size: 36px; }
+            .container { max-width: 1200px; margin: 0 auto; padding: 50px 20px; }
+            .stats-banner { background: white; border-radius: 15px; padding: 30px; text-align: center; margin-bottom: 50px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); }
+            .stat-grid { display: flex; justify-content: center; gap: 50px; flex-wrap: wrap; }
+            .stat-number { font-size: 42px; font-weight: bold; color: #D4A017; }
+            .package-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 30px; margin: 50px 0; }
+            .package-card { background: white; border-radius: 15px; padding: 35px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.08); position: relative; }
+            .package-card.featured { border: 2px solid #D4A017; }
+            .popular-badge { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: #D4A017; color: #1a3d1a; padding: 5px 20px; border-radius: 20px; font-size: 12px; font-weight: bold; white-space: nowrap; }
+            .package-price { font-size: 36px; font-weight: bold; color: #D4A017; margin: 20px 0; }
+            .btn-inquire { background: #1a3d1a; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block; margin-top: 15px; }
+            .btn-inquire:hover { background: #0d260d; }
+            .contact-form { background: white; border-radius: 15px; padding: 40px; margin: 50px 0; box-shadow: 0 4px 15px rgba(0,0,0,0.08); }
+            .contact-form h3 { color: #1a3d1a; margin-top: 0; }
+            input, select, textarea { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ddd; border-radius: 5px; box-sizing: border-box; font-family: Georgia; }
+            button[type=submit] { background: #1a3d1a; color: white; padding: 12px 30px; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; }
+            button[type=submit]:hover { background: #0d260d; }
+            .footer { background: #0d260d; color: white; text-align: center; padding: 30px; margin-top: 40px; }
+            @media (max-width: 768px) { .package-grid { grid-template-columns: 1fr; } }
+        </style>
+    </head>
+    <body>
+        <div class="header"><h1>📰 Advertise With The Gazette</h1><p>Reach thousands of local Spruce Grove readers</p></div>
+        <div class="container">
+            <div class="stats-banner">
+                <div class="stat-grid">
+                    <div><div class="stat-number">10,000+</div>Monthly Readers</div>
+                    <div><div class="stat-number">500+</div>Newsletter Subscribers</div>
+                    <div><div class="stat-number">100%</div>Local Audience</div>
+                </div>
+            </div>
+            <div class="package-grid">
+                <div class="package-card">
+                    <h3>Digital Display</h3>
+                    <div class="package-price">$100<span style="font-size:14px;color:#666;">/month</span></div>
+                    <p>Banner ad prominently placed on the homepage, seen by every visitor.</p>
+                    <a href="/inquire?package=Digital+Display+Ad" class="btn-inquire">Get Started →</a>
+                </div>
+                <div class="package-card featured">
+                    <div class="popular-badge">MOST POPULAR</div>
+                    <h3>Sponsored Article</h3>
+                    <div class="package-price">$200<span style="font-size:14px;color:#666;">/article</span></div>
+                    <p>A professionally written feature story about your business, published as editorial content.</p>
+                    <a href="/inquire?package=Sponsored+Article" class="btn-inquire">Get Started →</a>
+                </div>
+                <div class="package-card">
+                    <h3>Community Spotlight</h3>
+                    <div class="package-price">$300<span style="font-size:14px;color:#666;">/month</span></div>
+                    <p>Weekly featured business highlight across all Gazette channels and newsletter.</p>
+                    <a href="/inquire?package=Community+Spotlight" class="btn-inquire">Get Started →</a>
+                </div>
+            </div>
+            <div class="contact-form">
+                <h3><i class="fas fa-envelope" style="color:#D4A017;margin-right:10px;"></i>Request a Media Kit</h3>
+                <form action="/inquire" method="POST">
+                    <input type="text" name="business_name" placeholder="Business Name" required>
+                    <input type="text" name="contact_name" placeholder="Your Name" required>
+                    <input type="email" name="email" placeholder="Email Address" required>
+                    <input type="tel" name="phone" placeholder="Phone Number">
+                    <select name="package_interest">
+                        <option value="">I\'m interested in...</option>
+                        <option>Digital Display Ad</option>
+                        <option>Sponsored Article</option>
+                        <option>Community Spotlight</option>
+                        <option>Other / Not sure yet</option>
+                    </select>
+                    <textarea name="message" rows="4" placeholder="Tell us about your business and advertising goals..."></textarea>
+                    <button type="submit">Send Inquiry →</button>
+                </form>
+            </div>
+        </div>
+        <div class="footer"><p><a href="/" style="color:white;">← Back to Home</a> | <a href="/support" style="color:#D4A017;">Support the Gazette</a></p></div>
+    </body>
+    </html>
+    '''
+
+@app.route('/inquire', methods=['GET', 'POST'])
+def inquire():
+    package = request.args.get('package', '')
     if request.method == 'POST':
-        art.title = request.form['title']
-        art.body = request.form['body']
-        art.summary = request.form.get('summary', '')
-        art.category = request.form.get('category', 'News')
-        art.image_url = request.form.get('image_url', '')
-        art.author = request.form.get('author', 'Staff')
-        art.published = bool(request.form.get('published'))
-        db.session.commit()
-        flash('Article updated.', 'success')
-        return redirect(url_for('admin_articles'))
-    categories = ['News', 'Sports', 'Arts & Culture', 'Business', 'Community', 'Opinion']
-    return render_template('admin/edit_article.html', article=art, categories=categories)
+        business_name = request.form.get('business_name', '')
+        contact_name = request.form.get('contact_name', '')
+        email = request.form.get('email', '')
+        phone = request.form.get('phone', '')
+        package_interest = request.form.get('package_interest', '')
+        message = request.form.get('message', '')
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute('''CREATE TABLE IF NOT EXISTS ad_inquiries
+            (id INTEGER PRIMARY KEY AUTOINCREMENT, business_name TEXT, contact_name TEXT,
+             email TEXT, phone TEXT, package_interest TEXT, message TEXT, date DATE, status TEXT)''')
+        cursor.execute('''INSERT INTO ad_inquiries
+            (business_name, contact_name, email, phone, package_interest, message, date, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
+            (business_name, contact_name, email, phone, package_interest, message, datetime.now().date(), 'new'))
+        conn.commit()
+        conn.close()
+        return '''<html><body style="font-family:Georgia;text-align:center;padding:50px;background:#f9f9f5;">
+            <h1 style="color:#1a3d1a;">✅ Inquiry Received!</h1>
+            <p>Thank you for your interest in advertising with the Spruce Grove Gazette.</p>
+            <p>We'll be in touch within 1-2 business days.</p>
+            <a href="/" style="color:#1a3d1a;font-weight:bold;">← Back to Home</a>
+        </body></html>'''
+    return redirect(f'/advertise?package={package}')
 
+@app.route('/subscribe')
+def subscribe():
+    return '''
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Subscribe - Spruce Grove Gazette</title>
+        <style>
+            body { font-family: Georgia; background: #f9f9f5; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+            .container { background: white; padding: 50px 40px; border-radius: 15px; max-width: 450px; width: 100%; text-align: center; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+            h1 { color: #1a3d1a; margin-top: 0; }
+            p { color: #666; }
+            input { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ddd; border-radius: 5px; box-sizing: border-box; font-family: Georgia; font-size: 15px; }
+            button { background: #1a3d1a; color: white; padding: 14px 30px; border: none; border-radius: 5px; cursor: pointer; width: 100%; font-size: 16px; margin-top: 10px; }
+            button:hover { background: #0d260d; }
+            .back { display: block; margin-top: 20px; color: #1a3d1a; text-decoration: none; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>📧 Subscribe to the Gazette</h1>
+            <p>Get Spruce Grove news delivered to your inbox — free, twice a week.</p>
+            <form action="/do-subscribe" method="POST">
+                <input type="text" name="name" placeholder="Your Name" required>
+                <input type="email" name="email" placeholder="Your Email Address" required>
+                <button type="submit">📩 Subscribe Now</button>
+            </form>
+            <a href="/" class="back">← Back to Home</a>
+        </div>
+    </body>
+    </html>'''
 
-@app.route('/admin/articles/<int:id>/delete', methods=['POST'])
-def admin_delete_article(id):
-    admin_required()
-    art = Article.query.get_or_404(id)
-    db.session.delete(art)
-    db.session.commit()
-    flash('Article deleted.', 'success')
-    return redirect(url_for('admin_articles'))
+@app.route('/do-subscribe', methods=['POST'])
+def do_subscribe():
+    name = request.form.get('name', '').strip()
+    email = request.form.get('email', '').strip()
+    if not name or not email:
+        return redirect('/subscribe')
+    try:
+        conn = get_db()
+        conn.execute("INSERT OR IGNORE INTO subscribers (name, email, subscribed_date) VALUES (?,?,?)",
+                     (name, email, datetime.now().date().isoformat()))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"Subscribe error: {e}")
+    return f'''<!DOCTYPE html><html><head><meta charset="UTF-8">
+    <title>Subscribed!</title>
+    <style>body{{font-family:Georgia;background:#f9f9f5;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;}}
+    .box{{background:white;padding:50px 40px;border-radius:15px;max-width:450px;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,.1);}}</style>
+    </head><body><div class="box">
+    <h1 style="color:#1a3d1a;">✅ You're subscribed!</h1>
+    <p>Welcome, {name}! You'll receive Spruce Grove news at <strong>{email}</strong>.</p>
+    <a href="/" style="color:#1a3d1a;font-weight:bold;">← Back to Home</a>
+    </div></body></html>'''
 
+@app.route('/search')
+def search():
+    q = request.args.get('q', '').strip()
+    results = []
+    if q:
+        conn = get_db()
+        try:
+            articles = conn.execute(
+                "SELECT id, title, content, date FROM news_articles WHERE active=1 AND (title LIKE ? OR content LIKE ?) ORDER BY date DESC LIMIT 20",
+                (f'%{q}%', f'%{q}%')
+            ).fetchall()
+            for a in articles:
+                results.append({'type': 'News', 'id': a['id'], 'title': a['title'],
+                                 'snippet': (a['content'] or '')[:150] + '...', 'url': f'/article/{a["id"]}'})
+        except Exception as e:
+            print(f"Search news error: {e}")
+        try:
+            ads = conn.execute(
+                "SELECT id, title, description, category FROM classifieds WHERE active=1 AND (title LIKE ? OR description LIKE ?) ORDER BY date DESC LIMIT 10",
+                (f'%{q}%', f'%{q}%')
+            ).fetchall()
+            for a in ads:
+                results.append({'type': 'Classified', 'id': a['id'], 'title': a['title'],
+                                 'snippet': (a['description'] or '')[:150] + '...', 'url': f'/classified/{a["id"]}'})
+        except Exception as e:
+            print(f"Search classifieds error: {e}")
+        conn.close()
+    return f'''<!DOCTYPE html><html><head><meta charset="UTF-8">
+    <title>Search - Spruce Grove Gazette</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+    body{{font-family:Georgia,'Times New Roman',serif;background:#f9f9f5;margin:0;}}
+    nav{{background:#1a3d1a;padding:12px 20px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;}}
+    nav a{{color:#c8d5b9;text-decoration:none;font-size:13px;font-weight:bold;letter-spacing:.5px;}}
+    nav a:hover{{color:#fff;}}
+    .container{{max-width:800px;margin:40px auto;padding:0 20px;}}
+    h1{{color:#1a3d1a;}} .search-box{{display:flex;gap:10px;margin-bottom:30px;}}
+    .search-box input{{flex:1;padding:12px;border:2px solid #1a3d1a;border-radius:5px;font-size:16px;font-family:Georgia;}}
+    .search-box button{{background:#1a3d1a;color:white;padding:12px 24px;border:none;border-radius:5px;cursor:pointer;font-size:16px;}}
+    .result{{background:white;border-radius:8px;padding:20px;margin-bottom:16px;box-shadow:0 2px 8px rgba(0,0,0,.07);}}
+    .result a{{color:#1a3d1a;text-decoration:none;font-size:18px;font-weight:bold;}}
+    .result a:hover{{text-decoration:underline;}}
+    .badge{{display:inline-block;background:#e8f5e9;color:#1a3d1a;padding:2px 10px;border-radius:20px;font-size:12px;margin-bottom:8px;font-weight:bold;}}
+    .snippet{{color:#555;margin-top:6px;font-size:14px;}}
+    </style></head><body>
+    <nav>
+      <a href="/"><i class="fas fa-home"></i> HOME</a>
+      <a href="/news"><i class="fas fa-newspaper"></i> NEWS</a>
+      <a href="/events"><i class="fas fa-calendar-alt"></i> EVENTS</a>
+      <a href="/classifieds"><i class="fas fa-list"></i> CLASSIFIEDS</a>
+    </nav>
+    <div class="container">
+      <h1><i class="fas fa-search"></i> Search Results</h1>
+      <form action="/search" method="GET" class="search-box">
+        <input type="text" name="q" value="{q}" placeholder="Search news, classifieds...">
+        <button type="submit"><i class="fas fa-search"></i> Search</button>
+      </form>
+      {"".join([f'<div class="result"><span class="badge">{r["type"]}</span><br><a href="{r["url"]}">{r["title"]}</a><p class="snippet">{r["snippet"]}</p></div>' for r in results]) if results else (f'<p style="color:#888;">No results found for "<strong>{q}</strong>".</p>' if q else '<p style="color:#888;">Enter a search term above.</p>')}
+    </div></body></html>'''
 
-@app.route('/admin/moderate/<model>/<int:id>/<action>', methods=['POST'])
-def admin_moderate(model, id, action):
-    admin_required()
-    models = {'event': Event, 'classified': Classified, 'business': Business}
-    cls = models.get(model)
-    if not cls:
-        abort(404)
-    obj = cls.query.get_or_404(id)
-    if action == 'approve':
-        obj.approved = True
-        db.session.commit()
-        flash(f'{model.title()} approved.', 'success')
-    elif action == 'reject':
-        db.session.delete(obj)
-        db.session.commit()
-        flash(f'{model.title()} rejected.', 'success')
-    return redirect(url_for('admin_dashboard'))
-
-
-@app.route('/admin/events')
-def admin_events():
-    admin_required()
-    items = Event.query.order_by(Event.approved, Event.created_at.desc()).all()
-    return render_template('admin/moderate.html', items=items, model='event', title='Events')
-
-
-@app.route('/admin/classifieds')
-def admin_classifieds():
-    admin_required()
-    items = Classified.query.order_by(Classified.approved, Classified.created_at.desc()).all()
-    return render_template('admin/moderate.html', items=items, model='classified', title='Classifieds')
-
-
-@app.route('/admin/businesses')
-def admin_businesses():
-    admin_required()
-    items = Business.query.order_by(Business.approved, Business.created_at.desc()).all()
-    return render_template('admin/moderate.html', items=items, model='business', title='Businesses')
-
-
-@app.route('/admin/generate', methods=['POST'])
-def admin_generate():
-    admin_required()
-    import threading
-    t = threading.Thread(target=generate_daily_articles, daemon=True)
-    t.start()
-    flash('AI article generation started — refresh in 30 seconds.', 'info')
-    return redirect(url_for('admin_dashboard'))
-
-
-@app.route('/admin/subscribers')
-def admin_subscribers():
-    admin_required()
-    subs = Subscriber.query.order_by(Subscriber.created_at.desc()).all()
-    return render_template('admin/subscribers.html', subscribers=subs)
-
-
-# ──────────────────────────────────────────────
-# API ENDPOINTS (JSON)
-# ──────────────────────────────────────────────
-
-@app.route('/api/weather')
-def api_weather():
-    return jsonify(get_weather() or {})
-
-
-@app.route('/api/articles')
-def api_articles():
-    limit = min(int(request.args.get('limit', 20)), 100)
-    cat = request.args.get('category', '')
-    q = Article.query.filter_by(published=True)
-    if cat:
-        q = q.filter_by(category=cat)
-    arts = q.order_by(Article.created_at.desc()).limit(limit).all()
-    return jsonify([{
-        'id': a.id, 'title': a.title, 'slug': a.slug,
-        'summary': a.summary, 'category': a.category,
-        'author': a.author, 'created_at': a.created_at.isoformat()
-    } for a in arts])
-
-
-# ──────────────────────────────────────────────
-# SCHEDULED TASKS
-# ──────────────────────────────────────────────
-
-def cleanup_expired():
-    """Remove expired classifieds"""
-    with app.app_context():
-        expired = Classified.query.filter(
-            Classified.expires_at < datetime.utcnow()
-        ).all()
-        for ad in expired:
-            db.session.delete(ad)
-        if expired:
-            db.session.commit()
-            print(f'Cleaned up {len(expired)} expired classifieds')
-
-
-# Topic rotation — cycles through categories so articles stay varied
-_TOPIC_ROTATION = [
-    ('Community', 'a community event, neighbourhood initiative, or local volunteer story in Spruce Grove, Alberta'),
-    ('News',      'a local government update, city council decision, or infrastructure project in Spruce Grove, Alberta'),
-    ('Sports',    'a youth or amateur sports story, local team result, or recreation program in Spruce Grove, Alberta'),
-    ('Arts & Culture', 'a local arts event, cultural festival, library program, or creative community story in Spruce Grove, Alberta'),
-    ('Business',  'a new business opening, local entrepreneur story, or economic development update in Spruce Grove, Alberta'),
-    ('Opinion',   'an editorial opinion piece about life, growth, or community values in Spruce Grove, Alberta'),
-]
-_topic_index = 0
-
-
-def generate_daily_articles():
-    """Call Gemini to write 3 fresh Spruce Grove articles and save to DB."""
-    global _topic_index
-    key = os.environ.get('GEMINI_API_KEY', '')
-    if not key:
-        print('[AI] No GEMINI_API_KEY — skipping article generation')
-        return
-
-    url = f'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={key}'
-    today = datetime.utcnow().strftime('%B %d, %Y')
-
-    with app.app_context():
-        generated = 0
-        for _ in range(3):
-            cat, topic_desc = _TOPIC_ROTATION[_topic_index % len(_TOPIC_ROTATION)]
-            _topic_index += 1
-
-            prompt = (
-                f'You are a staff writer for the Spruce Grove Gazette, a community newspaper in Spruce Grove, Alberta, Canada. '
-                f'Today is {today}. Write a realistic, engaging local news article about {topic_desc}. '
-                f'Use specific Spruce Grove locations, street names, parks, or venues to make it feel authentic. '
-                f'Respond ONLY with valid JSON in this exact format:\n'
-                f'{{"title": "...", "summary": "One sentence, max 150 chars.", '
-                f'"body": "Full HTML article body using <p> tags, 3-5 paragraphs.", '
-                f'"author": "First Last (staff writer name)"}}'
-            )
-
+@app.route('/submit-tip', methods=['GET', 'POST'])
+def submit_tip():
+    if request.method == 'POST':
+        name = request.form.get('name', '').strip()
+        email = request.form.get('email', '').strip()
+        tip = request.form.get('tip', '').strip()
+        if tip:
             try:
-                resp = requests.post(url, json={
-                    'contents': [{'parts': [{'text': prompt}]}],
-                    'generationConfig': {'temperature': 0.85, 'maxOutputTokens': 1024}
-                }, timeout=20)
-
-                if resp.status_code != 200:
-                    print(f'[AI] Gemini error {resp.status_code}: {resp.text[:200]}')
-                    continue
-
-                raw = resp.json()
-                text = raw['candidates'][0]['content']['parts'][0]['text'].strip()
-                # Strip markdown code fences if present
-                if text.startswith('```'):
-                    text = text.split('```')[1]
-                    if text.startswith('json'):
-                        text = text[4:]
-                text = text.strip()
-
-                data = json.loads(text)
-                title   = data.get('title', '').strip()
-                summary = data.get('summary', '').strip()[:400]
-                body    = data.get('body', '').strip()
-                author  = data.get('author', 'Staff Writer').strip()
-
-                if not title or not body:
-                    print('[AI] Empty title or body — skipping')
-                    continue
-
-                # Build a unique slug
-                base_slug = slugify(title)
-                slug = base_slug
-                n = 1
-                while Article.query.filter_by(slug=slug).first():
-                    slug = f'{base_slug}-{n}'; n += 1
-
-                art = Article(
-                    title=title, slug=slug, body=body,
-                    summary=summary, category=cat,
-                    author=author, published=True,
-                )
-                db.session.add(art)
-                db.session.commit()
-                generated += 1
-                print(f'[AI] Generated: {title}')
-
-            except json.JSONDecodeError as e:
-                print(f'[AI] JSON parse error: {e}')
+                conn = get_db()
+                conn.execute("INSERT INTO news_tips (name, email, tip, date, status) VALUES (?,?,?,?,?)",
+                             (name, email, tip, datetime.now().date().isoformat(), 'pending'))
+                conn.commit()
+                conn.close()
             except Exception as e:
-                print(f'[AI] Unexpected error: {e}')
+                print(f"Tip error: {e}")
+        return '''<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Tip Received</title>
+        <style>body{font-family:Georgia;background:#f9f9f5;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;}
+        .box{background:white;padding:50px 40px;border-radius:15px;max-width:450px;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,.1);}</style>
+        </head><body><div class="box">
+        <h1 style="color:#1a3d1a;">✅ Tip Received!</h1>
+        <p>Thank you for your submission. Our journalists will review it.</p>
+        <a href="/" style="color:#1a3d1a;font-weight:bold;">← Back to Home</a>
+        </div></body></html>'''
+    return '''<!DOCTYPE html><html><head><meta charset="UTF-8">
+    <title>Submit a News Tip - Spruce Grove Gazette</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <style>body{font-family:Georgia;background:#f9f9f5;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;}
+    .container{background:white;padding:50px 40px;border-radius:15px;max-width:500px;width:100%;box-shadow:0 4px 20px rgba(0,0,0,.1);}
+    h1{color:#1a3d1a;margin-top:0;}
+    input,textarea{width:100%;padding:12px;margin:8px 0;border:1px solid #ddd;border-radius:5px;box-sizing:border-box;font-family:Georgia;font-size:15px;}
+    textarea{height:120px;resize:vertical;}
+    button{background:#1a3d1a;color:white;padding:14px 30px;border:none;border-radius:5px;cursor:pointer;width:100%;font-size:16px;margin-top:10px;}
+    button:hover{background:#0d260d;}
+    .back{display:block;margin-top:20px;color:#1a3d1a;text-decoration:none;text-align:center;}
+    </style></head><body>
+    <div class="container">
+      <h1>📰 Submit a News Tip</h1>
+      <p style="color:#666;">Know something newsworthy? Let us know!</p>
+      <form action="/submit-tip" method="POST">
+        <input type="text" name="name" placeholder="Your Name (optional)">
+        <input type="email" name="email" placeholder="Your Email (optional)">
+        <textarea name="tip" placeholder="Describe your news tip..." required></textarea>
+        <button type="submit">Send Tip</button>
+      </form>
+      <a href="/" class="back">← Back to Home</a>
+    </div></body></html>'''
 
-        print(f'[AI] Daily generation complete — {generated}/3 articles saved')
+@app.route('/submit-photo', methods=['GET', 'POST'])
+def submit_photo():
+    if request.method == 'POST':
+        name = request.form.get('name', '').strip()
+        email = request.form.get('email', '').strip()
+        caption = request.form.get('caption', '').strip()
+        return '''<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Photo Received</title>
+        <style>body{font-family:Georgia;background:#f9f9f5;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;}
+        .box{background:white;padding:50px 40px;border-radius:15px;max-width:450px;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,.1);}</style>
+        </head><body><div class="box">
+        <h1 style="color:#1a3d1a;">✅ Photo Submitted!</h1>
+        <p>Thank you! We'll review your photo submission.</p>
+        <a href="/" style="color:#1a3d1a;font-weight:bold;">← Back to Home</a>
+        </div></body></html>'''
+    return '''<!DOCTYPE html><html><head><meta charset="UTF-8">
+    <title>Submit a Photo - Spruce Grove Gazette</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <style>body{font-family:Georgia;background:#f9f9f5;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;}
+    .container{background:white;padding:50px 40px;border-radius:15px;max-width:500px;width:100%;box-shadow:0 4px 20px rgba(0,0,0,.1);}
+    h1{color:#1a3d1a;margin-top:0;}
+    input,textarea{width:100%;padding:12px;margin:8px 0;border:1px solid #ddd;border-radius:5px;box-sizing:border-box;font-family:Georgia;font-size:15px;}
+    button{background:#1a3d1a;color:white;padding:14px 30px;border:none;border-radius:5px;cursor:pointer;width:100%;font-size:16px;margin-top:10px;}
+    button:hover{background:#0d260d;}
+    .back{display:block;margin-top:20px;color:#1a3d1a;text-decoration:none;text-align:center;}
+    </style></head><body>
+    <div class="container">
+      <h1>📷 Submit a Community Photo</h1>
+      <p style="color:#666;">Share your Spruce Grove moments with the community!</p>
+      <form action="/submit-photo" method="POST" enctype="multipart/form-data">
+        <input type="text" name="name" placeholder="Your Name" required>
+        <input type="email" name="email" placeholder="Your Email" required>
+        <input type="file" name="photo" accept="image/*" required>
+        <textarea name="caption" placeholder="Caption / Description..." style="height:80px;resize:vertical;"></textarea>
+        <button type="submit">Upload Photo</button>
+      </form>
+      <a href="/" class="back">← Back to Home</a>
+    </div></body></html>'''
 
+@app.route('/business-directory')
+def business_directory():
+    conn = get_db()
+    try:
+        businesses = conn.execute(
+            "SELECT * FROM businesses ORDER BY name ASC"
+        ).fetchall()
+    except Exception:
+        businesses = []
+    conn.close()
+    cards = ""
+    for b in businesses:
+        cards += f'''<div class="biz-card">
+          <div class="biz-icon"><i class="fas fa-store"></i></div>
+          <h3>{b["name"]}</h3>
+          <p class="cat">{b.get("category","") or ""}</p>
+          <p class="desc">{b.get("description","") or ""}</p>
+          {('<p><i class="fas fa-phone"></i> ' + b["phone"] + '</p>') if b.get("phone") else ""}
+          {('<p><i class="fas fa-globe"></i> <a href="' + b["website"] + '" target="_blank">' + b["website"] + '</a></p>') if b.get("website") else ""}
+        </div>'''
+    if not cards:
+        cards = '<p style="text-align:center;color:#888;grid-column:1/-1;">No businesses listed yet. <a href="/submit-business" style="color:#1a3d1a;">Be the first!</a></p>'
+    return f'''<!DOCTYPE html><html><head><meta charset="UTF-8">
+    <title>Business Directory - Spruce Grove Gazette</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+    *{{box-sizing:border-box;}}
+    body{{font-family:Georgia,'Times New Roman',serif;background:#f9f9f5;margin:0;}}
+    nav{{background:#1a3d1a;padding:12px 20px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;}}
+    nav a{{color:#c8d5b9;text-decoration:none;font-size:13px;font-weight:bold;letter-spacing:.5px;}}
+    nav a:hover{{color:#fff;}}
+    .hero{{background:linear-gradient(135deg,#1a3d1a,#2d6a2d);color:white;padding:60px 20px;text-align:center;}}
+    .hero h1{{margin:0 0 10px;font-size:2.5rem;}}
+    .hero p{{margin:0;opacity:.9;font-size:1.1rem;}}
+    .container{{max-width:1100px;margin:40px auto;padding:0 20px;}}
+    .grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:24px;}}
+    .biz-card{{background:white;border-radius:12px;padding:28px;box-shadow:0 2px 12px rgba(0,0,0,.08);text-align:center;transition:transform .2s;}}
+    .biz-card:hover{{transform:translateY(-4px);box-shadow:0 6px 20px rgba(0,0,0,.12);}}
+    .biz-icon{{font-size:2.5rem;color:#1a3d1a;margin-bottom:12px;}}
+    .biz-card h3{{color:#1a3d1a;margin:0 0 6px;}}
+    .cat{{color:#888;font-size:13px;margin:0 0 10px;}}
+    .desc{{color:#555;font-size:14px;}}
+    .add-btn{{display:inline-block;background:#1a3d1a;color:white;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:bold;margin-top:30px;}}
+    .add-btn:hover{{background:#0d260d;}}
+    </style></head><body>
+    <nav>
+      <a href="/"><i class="fas fa-home"></i> HOME</a>
+      <a href="/news"><i class="fas fa-newspaper"></i> NEWS</a>
+      <a href="/events"><i class="fas fa-calendar-alt"></i> EVENTS</a>
+      <a href="/classifieds"><i class="fas fa-list"></i> CLASSIFIEDS</a>
+      <a href="/business-directory"><i class="fas fa-store"></i> BUSINESSES</a>
+      <a href="/advertise"><i class="fas fa-bullhorn"></i> ADVERTISE</a>
+    </nav>
+    <div class="hero">
+      <h1><i class="fas fa-store"></i> Business Directory</h1>
+      <p>Supporting local businesses in Spruce Grove, Alberta</p>
+    </div>
+    <div class="container">
+      <div style="text-align:right;margin-bottom:24px;">
+        <a href="/submit-business" class="add-btn"><i class="fas fa-plus"></i> List Your Business</a>
+      </div>
+      <div class="grid">{cards}</div>
+    </div></body></html>'''
 
-# ──────────────────────────────────────────────
-# APP STARTUP
-# ──────────────────────────────────────────────
+@app.route('/submit-business', methods=['GET', 'POST'])
+def submit_business():
+    if request.method == 'POST':
+        name = request.form.get('name', '').strip()
+        category = request.form.get('category', '').strip()
+        description = request.form.get('description', '').strip()
+        phone = request.form.get('phone', '').strip()
+        email = request.form.get('email', '').strip()
+        website = request.form.get('website', '').strip()
+        address = request.form.get('address', '').strip()
+        if name:
+            try:
+                conn = get_db()
+                conn.execute('''CREATE TABLE IF NOT EXISTS businesses
+                    (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, category TEXT,
+                     description TEXT, phone TEXT, email TEXT, website TEXT,
+                     address TEXT, date TEXT)''')
+                conn.execute('''INSERT INTO businesses (name, category, description, phone, email, website, address, date)
+                    VALUES (?,?,?,?,?,?,?,?)''',
+                    (name, category, description, phone, email, website, address, datetime.now().date().isoformat()))
+                conn.commit()
+                conn.close()
+            except Exception as e:
+                print(f"Submit business error: {e}")
+        return '''<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Business Listed!</title>
+        <style>body{font-family:Georgia;background:#f9f9f5;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;}
+        .box{background:white;padding:50px 40px;border-radius:15px;max-width:450px;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,.1);}</style>
+        </head><body><div class="box">
+        <h1 style="color:#1a3d1a;">✅ Business Submitted!</h1>
+        <p>Thank you! Your business listing will be reviewed and added shortly.</p>
+        <a href="/business-directory" style="color:#1a3d1a;font-weight:bold;">← View Directory</a>
+        </div></body></html>'''
+    categories = ['Retail','Restaurant & Food','Health & Wellness','Professional Services',
+                  'Home & Garden','Automotive','Entertainment','Education','Other']
+    cat_options = "".join([f'<option value="{c}">{c}</option>' for c in categories])
+    return f'''<!DOCTYPE html><html><head><meta charset="UTF-8">
+    <title>List Your Business - Spruce Grove Gazette</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <style>body{{font-family:Georgia;background:#f9f9f5;padding:40px 20px;margin:0;}}
+    .container{{background:white;padding:50px 40px;border-radius:15px;max-width:600px;margin:0 auto;box-shadow:0 4px 20px rgba(0,0,0,.1);}}
+    h1{{color:#1a3d1a;margin-top:0;}}
+    input,textarea,select{{width:100%;padding:12px;margin:8px 0;border:1px solid #ddd;border-radius:5px;box-sizing:border-box;font-family:Georgia;font-size:15px;}}
+    textarea{{height:100px;resize:vertical;}}
+    button{{background:#1a3d1a;color:white;padding:14px 30px;border:none;border-radius:5px;cursor:pointer;width:100%;font-size:16px;margin-top:10px;}}
+    button:hover{{background:#0d260d;}}
+    .back{{display:block;margin-top:20px;color:#1a3d1a;text-decoration:none;text-align:center;}}
+    label{{font-weight:bold;color:#1a3d1a;font-size:14px;}}
+    </style></head><body>
+    <div class="container">
+      <h1><i class="fas fa-store"></i> List Your Business</h1>
+      <p style="color:#666;">Get your business in front of Spruce Grove readers — free!</p>
+      <form action="/submit-business" method="POST">
+        <label>Business Name *</label>
+        <input type="text" name="name" placeholder="e.g. Grove Coffee House" required>
+        <label>Category</label>
+        <select name="category"><option value="">-- Select Category --</option>{cat_options}</select>
+        <label>Short Description</label>
+        <textarea name="description" placeholder="What does your business do? (2-3 sentences)"></textarea>
+        <label>Phone</label>
+        <input type="tel" name="phone" placeholder="(780) 000-0000">
+        <label>Email</label>
+        <input type="email" name="email" placeholder="contact@yourbusiness.com">
+        <label>Website</label>
+        <input type="url" name="website" placeholder="https://yourbusiness.com">
+        <label>Address</label>
+        <input type="text" name="address" placeholder="123 Main St, Spruce Grove, AB">
+        <button type="submit"><i class="fas fa-store"></i> Submit Listing</button>
+      </form>
+      <a href="/business-directory" class="back">← Back to Directory</a>
+    </div></body></html>'''
 
-def create_app(start_scheduler=True):
-    with app.app_context():
-        db.create_all()
-        # Seed sample data if empty
-        if Article.query.count() == 0:
-            sample = Article(
-                title='Welcome to the Spruce Grove Gazette v2',
-                slug='welcome-to-gazette-v2',
-                body='<p>The Gazette v2 is live! This improved version features a proper database, '
-                     'blueprint architecture, better admin tools, and a mobile-friendly design.</p>'
-                     '<p>Stay tuned for more Spruce Grove news, events, and community updates.</p>',
-                summary='Spruce Grove Gazette v2 is now live with improvements.',
-                category='News',
-                author='Editorial Staff',
-                published=True,
-            )
-            db.session.add(sample)
-            db.session.commit()
+# ─────────────────────────────────────────
+# API Routes
+# ─────────────────────────────────────────
 
-    if start_scheduler:
-        scheduler = BackgroundScheduler()
-        scheduler.add_job(cleanup_expired, 'interval', hours=24)
-        scheduler.add_job(generate_daily_articles, 'cron', hour=6, minute=0)  # 6 AM UTC daily
-        scheduler.start()
+@app.route('/api/public-news')
+def api_public_news():
+    """Public aggregated news feed used by the AI crew."""
+    conn = get_db()
+    try:
+        articles = conn.execute(
+            "SELECT title, content, source, date FROM news_articles WHERE active=1 ORDER BY date DESC LIMIT 20"
+        ).fetchall()
+        result = [{'title': a['title'], 'source': a.get('source','Spruce Grove Gazette'),
+                   'published_at': a['date']} for a in articles]
+    except Exception as e:
+        print(f"API public-news error: {e}")
+        result = []
+    conn.close()
+    return jsonify(result)
 
-        # Generate articles immediately if the DB is nearly empty (must be inside app context)
-        with app.app_context():
-            if Article.query.count() <= 1:
-                import threading
-                t = threading.Thread(target=generate_daily_articles, daemon=True)
-                t.start()
+@app.route('/api/news')
+def api_news():
+    conn = get_db()
+    try:
+        articles = conn.execute(
+            "SELECT id, title, content, image_url, date FROM news_articles WHERE active=1 ORDER BY date DESC LIMIT 50"
+        ).fetchall()
+        result = [dict(a) for a in articles]
+    except Exception as e:
+        print(f"API news error: {e}")
+        result = []
+    conn.close()
+    return jsonify(result)
 
-    return app
+@app.route('/api/events')
+def api_events():
+    conn = get_db()
+    try:
+        events = conn.execute(
+            "SELECT * FROM events WHERE approved=1 ORDER BY date ASC LIMIT 30"
+        ).fetchall()
+        result = [dict(e) for e in events]
+    except Exception as e:
+        print(f"API events error: {e}")
+        result = []
+    conn.close()
+    return jsonify(result)
 
+# ─────────────────────────────────────────
+# Service Worker — self-unregistering
+# (old cached SW caused no-op fetch warning)
+# ─────────────────────────────────────────
 
-# Initialize DB, seed data, and start scheduler (runs for both gunicorn and direct python)
-create_app()
+@app.route('/sw.js')
+def service_worker():
+    sw_code = (
+        "self.addEventListener('install', () => self.skipWaiting());\n"
+        "self.addEventListener('activate', event => {\n"
+        "  event.waitUntil(\n"
+        "    self.registration.unregister()\n"
+        "      .then(() => self.clients.matchAll())\n"
+        "      .then(clients => clients.forEach(c => c.navigate(c.url)))\n"
+        "  );\n"
+        "});\n"
+    )
+    from flask import Response
+    return Response(sw_code, mimetype='application/javascript',
+                    headers={'Cache-Control': 'no-cache, no-store, must-revalidate'})
+
 
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5001))
-    app.run(host='0.0.0.0', debug=False, port=port)
+    port = int(os.environ.get('PORT', 10000))
+    app.run(host='0.0.0.0', port=port, debug=False)
