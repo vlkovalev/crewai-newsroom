@@ -575,7 +575,7 @@ def news_index():
         for a in articles:
             articles_html += f'''
             <div class="news-article">
-                <div class="article-category">{a["category"]}</div>
+                <a href="/category/{a['category']}" class="article-category">{a["category"]}</a>
                 <h2><a href="/article/{a["id"]}">{a["title"]}</a></h2>
                 <div class="article-meta"><i class="fas fa-calendar-alt"></i> {a["date"][:10] if a["date"] else "Recent"} | <i class="fas fa-newspaper"></i> {a["source"]} | <i class="fas fa-eye"></i> {a["views"]} views</div>
                 <p>{a["summary"]}...</p>
@@ -615,6 +615,65 @@ def news_index():
     </body>
     </html>
     '''
+
+@app.route('/category/<category>')
+def category_page(category):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT id, title, summary, source, date, category, views FROM news_articles "
+        "WHERE active = 1 AND LOWER(category) = LOWER(?) ORDER BY date DESC LIMIT 50",
+        (category,)
+    )
+    rows = cursor.fetchall()
+    conn.close()
+
+    articles_html = ""
+    if rows:
+        for row in rows:
+            aid, title, summary, source, date, cat, views = row
+            date_str = (date or "")[:10] or "Recent"
+            articles_html += f'''
+            <div class="news-article">
+                <a href="/category/{cat}" class="article-category">{cat}</a>
+                <h2><a href="/article/{aid}">{title}</a></h2>
+                <div class="article-meta"><i class="fas fa-calendar-alt"></i> {date_str} | <i class="fas fa-newspaper"></i> {source} | <i class="fas fa-eye"></i> {views} views</div>
+                <p>{(summary or "")[:200]}...</p>
+                <a href="/article/{aid}" class="read-more">Read Full Story →</a>
+            </div>'''
+    else:
+        articles_html = f'<p>No articles in <strong>{category}</strong> yet. Check back soon!</p>'
+
+    return f'''<!DOCTYPE html>
+    <html>
+    <head><title>{category} - {NEWSPAPER_NAME}</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body{{font-family:Georgia;background:#f9f9f5;margin:0}}
+        .header{{background:#1a3d1a;color:white;padding:30px;text-align:center}}
+        .nav{{background:#2C5F2D;padding:12px;text-align:center}}
+        .nav a{{color:white;margin:0 15px;text-decoration:none}}
+        .container{{max-width:800px;margin:0 auto;padding:40px 20px}}
+        .news-article{{background:white;border-radius:10px;padding:30px;margin-bottom:30px;box-shadow:0 2px 5px rgba(0,0,0,0.1)}}
+        .article-category{{display:inline-block;background:#D4A017;color:#1a3d1a;padding:4px 12px;border-radius:15px;font-size:11px;margin-bottom:15px;text-decoration:none}}
+        .article-meta{{color:#666;margin:15px 0}}
+        .read-more{{color:#D4A017;font-weight:bold;text-decoration:none;display:inline-block;margin-top:15px}}
+        .btn{{background:#1a3d1a;color:white;padding:12px 24px;border-radius:5px;text-decoration:none;display:inline-block}}
+        .footer{{background:#0d260d;color:white;text-align:center;padding:30px;margin-top:40px}}
+    </style>
+    </head>
+    <body>
+        <div class="header"><h1><i class="fas fa-tag"></i> {category}</h1><p>All {category} stories from the Spruce Grove Gazette</p></div>
+        <div class="nav"><a href="/">Home</a><a href="/news">All News</a><a href="/events">Events</a><a href="/classifieds">Classifieds</a></div>
+        <div class="container">
+            <h1>{category} Stories</h1>
+            {articles_html}
+            <a href="/news" class="btn">← All News</a>
+        </div>
+        <div class="footer"><p>© {datetime.now().year} {NEWSPAPER_NAME}</p></div>
+    </body>
+    </html>'''
+
 
 @app.route('/article/<int:article_id>')
 def article_page(article_id):
