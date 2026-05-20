@@ -1,5 +1,6 @@
 import os
-import sqlite3
+import psycopg2
+import psycopg2.extras
 import requests
 import json
 import traceback
@@ -27,84 +28,74 @@ PAYPAL_CLIENT_ID = os.environ.get('PAYPAL_CLIENT_ID', 'sb')
 OPENWEATHER_API_KEY = os.environ.get('OPENWEATHER_API_KEY', '')
 GAZETTE_API_KEY = os.environ.get('GAZETTE_API_KEY', '')
 
-DB_PATH = 'gazette.db'
+DATABASE_URL = os.environ.get('DATABASE_URL', '')
 
 def init_database():
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db()
     cursor = conn.cursor()
-    
-    # Create all tables
+
     cursor.execute('''CREATE TABLE IF NOT EXISTS subscribers (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT UNIQUE, name TEXT, 
-        subscribed_date DATE, active BOOLEAN DEFAULT 1, neighborhood TEXT)''')
-    
+        id SERIAL PRIMARY KEY, email TEXT UNIQUE, name TEXT,
+        subscribed_date DATE, active BOOLEAN DEFAULT TRUE, neighborhood TEXT)''')
+
     cursor.execute('''CREATE TABLE IF NOT EXISTS supporters (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT UNIQUE, name TEXT, 
-        tier TEXT, amount INTEGER, start_date DATE, active BOOLEAN DEFAULT 1, 
+        id SERIAL PRIMARY KEY, email TEXT UNIQUE, name TEXT,
+        tier TEXT, amount INTEGER, start_date DATE, active BOOLEAN DEFAULT TRUE,
         paypal_subscription_id TEXT, transaction_id TEXT)''')
-    
+
     cursor.execute('''CREATE TABLE IF NOT EXISTS news_articles (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, content TEXT, 
-        summary TEXT, source TEXT, author TEXT, date DATETIME, category TEXT, 
-        featured BOOLEAN DEFAULT 0, active BOOLEAN DEFAULT 1, 
+        id SERIAL PRIMARY KEY, title TEXT, content TEXT,
+        summary TEXT, source TEXT, author TEXT, date TIMESTAMP, category TEXT,
+        featured BOOLEAN DEFAULT FALSE, active BOOLEAN DEFAULT TRUE,
         url TEXT, image_url TEXT, views INTEGER DEFAULT 0)''')
-    
+
     cursor.execute('''CREATE TABLE IF NOT EXISTS events (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, description TEXT, 
-        date DATE, time TEXT, location TEXT, ticket_price TEXT, 
-        total_tickets INTEGER, tickets_sold INTEGER DEFAULT 0, 
-        organizer TEXT, email TEXT, approved BOOLEAN DEFAULT 1, 
+        id SERIAL PRIMARY KEY, title TEXT, description TEXT,
+        date DATE, time TEXT, location TEXT, ticket_price TEXT,
+        total_tickets INTEGER, tickets_sold INTEGER DEFAULT 0,
+        organizer TEXT, email TEXT, approved BOOLEAN DEFAULT TRUE,
         date_submitted DATE, recurring TEXT, expiry_date DATE)''')
-    
+
     cursor.execute('''CREATE TABLE IF NOT EXISTS classifieds (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, category TEXT, title TEXT, 
-        description TEXT, price TEXT, contact TEXT, email TEXT, phone TEXT, 
-        photo TEXT, featured BOOLEAN DEFAULT 0, date DATE, expiry_date DATE, 
-        renewed_count INTEGER DEFAULT 0, active BOOLEAN DEFAULT 1)''')
-    
+        id SERIAL PRIMARY KEY, category TEXT, title TEXT,
+        description TEXT, price TEXT, contact TEXT, email TEXT, phone TEXT,
+        photo TEXT, featured BOOLEAN DEFAULT FALSE, date DATE, expiry_date DATE,
+        renewed_count INTEGER DEFAULT 0, active BOOLEAN DEFAULT TRUE)''')
+
     cursor.execute('''CREATE TABLE IF NOT EXISTS businesses (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, category TEXT, 
-        description TEXT, address TEXT, phone TEXT, email TEXT, website TEXT, 
-        logo TEXT, featured BOOLEAN DEFAULT 0, approved BOOLEAN DEFAULT 1, 
+        id SERIAL PRIMARY KEY, name TEXT, category TEXT,
+        description TEXT, address TEXT, phone TEXT, email TEXT, website TEXT,
+        logo TEXT, featured BOOLEAN DEFAULT FALSE, approved BOOLEAN DEFAULT TRUE,
         date DATE, views INTEGER DEFAULT 0)''')
-    
+
     cursor.execute('''CREATE TABLE IF NOT EXISTS news_tips (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, email TEXT, tip TEXT, 
+        id SERIAL PRIMARY KEY, name TEXT, email TEXT, tip TEXT,
         category TEXT, date DATE, status TEXT DEFAULT 'pending')''')
-    
+
     cursor.execute('''CREATE TABLE IF NOT EXISTS photo_submissions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, email TEXT, title TEXT, 
-        caption TEXT, filename TEXT, date DATE, approved BOOLEAN DEFAULT 0)''')
-    
+        id SERIAL PRIMARY KEY, name TEXT, email TEXT, title TEXT,
+        caption TEXT, filename TEXT, date DATE, approved BOOLEAN DEFAULT FALSE)''')
+
     cursor.execute('''CREATE TABLE IF NOT EXISTS ad_inquiries (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, business_name TEXT, contact_name TEXT, 
-        email TEXT, phone TEXT, package_interest TEXT, message TEXT, 
+        id SERIAL PRIMARY KEY, business_name TEXT, contact_name TEXT,
+        email TEXT, phone TEXT, package_interest TEXT, message TEXT,
         date DATE, status TEXT DEFAULT 'new')''')
-    
+
     cursor.execute('''CREATE TABLE IF NOT EXISTS payments (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT, name TEXT, 
-        amount INTEGER, tier TEXT, transaction_id TEXT, 
+        id SERIAL PRIMARY KEY, email TEXT, name TEXT,
+        amount INTEGER, tier TEXT, transaction_id TEXT,
         payment_date DATE, status TEXT DEFAULT 'completed')''')
-    
-    # Add missing columns if needed
-    try:
-        cursor.execute("ALTER TABLE events ADD COLUMN recurring TEXT")
-    except: pass
-    try:
-        cursor.execute("ALTER TABLE events ADD COLUMN expiry_date DATE")
-    except: pass
-    try:
-        cursor.execute("ALTER TABLE classifieds ADD COLUMN expiry_date DATE")
-    except: pass
-    try:
-        cursor.execute("ALTER TABLE classifieds ADD COLUMN renewed_count INTEGER DEFAULT 0")
-    except: pass
-    
-    cursor.execute("UPDATE classifieds SET expiry_date = date('now', '+30 days') WHERE expiry_date IS NULL")
-    
-    # NO SAMPLE DATA - Start with empty tables!
-    # No fake businesses, no fake ads, no fake events, no fake news
-    
+
+    for sql in [
+        "ALTER TABLE events ADD COLUMN IF NOT EXISTS recurring TEXT",
+        "ALTER TABLE events ADD COLUMN IF NOT EXISTS expiry_date DATE",
+        "ALTER TABLE classifieds ADD COLUMN IF NOT EXISTS expiry_date DATE",
+        "ALTER TABLE classifieds ADD COLUMN IF NOT EXISTS renewed_count INTEGER DEFAULT 0",
+    ]:
+        cursor.execute(sql)
+
+    cursor.execute("UPDATE classifieds SET expiry_date = CURRENT_DATE + INTERVAL '30 days' WHERE expiry_date IS NULL")
+
     conn.commit()
     conn.close()
 
@@ -179,52 +170,48 @@ def get_weather():
     }
 
 def get_news_articles(limit=10):
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, title, summary, source, date, category, views FROM news_articles WHERE active = 1 ORDER BY date DESC LIMIT ?", (limit,))
+    cursor.execute("SELECT id, title, summary, source, date, category, views FROM news_articles WHERE active = TRUE ORDER BY date DESC LIMIT %s", (limit,))
     articles = cursor.fetchall()
     conn.close()
-    return [{"id": a[0], "title": a[1], "summary": a[2], "source": a[3], "date": a[4], "category": a[5], "views": a[6]} for a in articles]
+    return [dict(a) for a in articles]
 
 def get_article_by_id(article_id):
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, title, content, summary, source, author, date, category FROM news_articles WHERE id = ? AND active = 1", (article_id,))
+    cursor.execute("SELECT id, title, content, summary, source, author, date, category FROM news_articles WHERE id = %s AND active = TRUE", (article_id,))
     article = cursor.fetchone()
     if article:
-        cursor.execute("UPDATE news_articles SET views = views + 1 WHERE id = ?", (article_id,))
+        cursor.execute("UPDATE news_articles SET views = views + 1 WHERE id = %s", (article_id,))
         conn.commit()
     conn.close()
-    if article:
-        return {"id": article[0], "title": article[1], "content": article[2], "summary": article[3], 
-                "source": article[4], "author": article[5], "date": article[6], "category": article[7]}
-    return None
+    return dict(article) if article else None
 
 def get_events(limit=12):
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT title, description, date, time, location, ticket_price FROM events WHERE approved = 1 AND date >= date('now') ORDER BY date LIMIT ?", (limit,))
+    cursor.execute("SELECT title, description, date, time, location, ticket_price FROM events WHERE approved = TRUE AND date >= CURRENT_DATE ORDER BY date LIMIT %s", (limit,))
     events = cursor.fetchall()
     conn.close()
-    return [{"title": e[0], "description": e[1], "date": e[2], "time": e[3], "location": e[4], "ticket_price": e[5]} for e in events]
+    return [dict(e) for e in events]
 
 def get_businesses(limit=6):
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT name, category, description, phone, website FROM businesses WHERE approved = 1 LIMIT ?", (limit,))
+    cursor.execute("SELECT name, category, description, phone, website FROM businesses WHERE approved = TRUE LIMIT %s", (limit,))
     businesses = cursor.fetchall()
     conn.close()
-    # Return empty list if no businesses - NO fake businesses
-    return [{"name": b[0], "category": b[1], "description": b[2], "phone": b[3], "website": b[4]} for b in businesses]
+    return [dict(b) for b in businesses]
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def get_db():
-    """Return a sqlite3 connection with row_factory set so columns are accessible by name."""
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+    url = DATABASE_URL
+    if url.startswith('postgres://'):
+        url = url.replace('postgres://', 'postgresql://', 1)
+    return psycopg2.connect(url, cursor_factory=psycopg2.extras.RealDictCursor)
 
 # Initialize database
 init_database()
@@ -298,9 +285,9 @@ def home():
         businesses = get_businesses(3)
         news_articles = get_news_articles(6)
         
-        conn = sqlite3.connect(DB_PATH)
+        conn = get_db()
         cursor = conn.cursor()
-        cursor.execute("SELECT title, description, price, contact, date, category FROM classifieds WHERE active = 1 AND expiry_date >= date('now') ORDER BY date DESC LIMIT 3")
+        cursor.execute("SELECT title, description, price, contact, date, category FROM classifieds WHERE active = TRUE AND expiry_date >= CURRENT_DATE ORDER BY date DESC LIMIT 3")
         classifieds_list = cursor.fetchall()
         conn.close()
         
@@ -329,7 +316,7 @@ def home():
         classifieds_html = ""
         if classifieds_list:
             for c in classifieds_list:
-                classifieds_html += f'<div class="classified-item"><span class="classified-category-badge">{c[5].upper() if c[5] else "GENERAL"}</span><strong>{c[0]}</strong><p>{c[1][:80]}...</p><div class="classified-price">{c[2] if c[2] else "Call for price"}</div></div>'
+                classifieds_html += f'<div class="classified-item"><span class="classified-category-badge">{c["category"].upper() if c["category"] else "GENERAL"}</span><strong>{c["title"]}</strong><p>{c["description"][:80]}...</p><div class="classified-price">{c["price"] if c["price"] else "Call for price"}</div></div>'
         else:
             classifieds_html = '<p>No classifieds yet. <a href="/post-ad">Post an ad</a></p>'
         
@@ -627,11 +614,11 @@ def news_index():
 
 @app.route('/category/<category>')
 def category_page(category):
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db()
     cursor = conn.cursor()
     cursor.execute(
         "SELECT id, title, summary, source, date, category, views FROM news_articles "
-        "WHERE active = 1 AND LOWER(category) = LOWER(?) ORDER BY date DESC LIMIT 50",
+        "WHERE active = TRUE AND LOWER(category) = LOWER(%s) ORDER BY date DESC LIMIT 50",
         (category,)
     )
     rows = cursor.fetchall()
@@ -640,7 +627,7 @@ def category_page(category):
     articles_html = ""
     if rows:
         for row in rows:
-            aid, title, summary, source, date, cat, views = row
+            aid, title, summary, source, date, cat, views = row['id'], row['title'], row['summary'], row['source'], row['date'], row['category'], row['views']
             date_str = (date or "")[:10] or "Recent"
             articles_html += f'''
             <div class="news-article">
@@ -788,11 +775,11 @@ def events_list():
 @app.route('/events/create', methods=['GET', 'POST'])
 def create_event():
     if request.method == 'POST':
-        conn = sqlite3.connect(DB_PATH)
+        conn = get_db()
         cursor = conn.cursor()
-        cursor.execute('''INSERT INTO events (title, description, date, time, location, ticket_price, 
+        cursor.execute('''INSERT INTO events (title, description, date, time, location, ticket_price,
                         total_tickets, organizer, email, date_submitted, approved)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)''',
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE)''',
                       (request.form.get('title'), request.form.get('description'), request.form.get('date'),
                        request.form.get('time'), request.form.get('location'), request.form.get('ticket_price', 'Free'),
                        request.form.get('total_tickets'), request.form.get('organizer'), request.form.get('email'), date.today()))
@@ -810,17 +797,17 @@ def create_event():
 @app.route('/classifieds')
 def classifieds():
     category = request.args.get('category', 'all')
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db()
     cursor = conn.cursor()
     today = date.today()
-    
+
     category_map = {'jobs': 'Jobs', 'for-sale': 'For Sale', 'housing': 'Housing', 'services': 'Services', 'garage': 'Garage Sale'}
-    
+
     if category != 'all' and category in category_map:
-        cursor.execute("SELECT id, title, description, price, contact, date, category FROM classifieds WHERE active = 1 AND expiry_date >= ? AND category = ? ORDER BY date DESC", (today, category_map[category]))
+        cursor.execute("SELECT id, title, description, price, contact, date, category FROM classifieds WHERE active = TRUE AND expiry_date >= %s AND category = %s ORDER BY date DESC", (today, category_map[category]))
     else:
-        cursor.execute("SELECT id, title, description, price, contact, date, category FROM classifieds WHERE active = 1 AND expiry_date >= ? ORDER BY date DESC", (today,))
-    
+        cursor.execute("SELECT id, title, description, price, contact, date, category FROM classifieds WHERE active = TRUE AND expiry_date >= %s ORDER BY date DESC", (today,))
+
     items = cursor.fetchall()
     conn.close()
     
@@ -837,16 +824,16 @@ def classifieds():
     classifieds_html = ""
     if items:
         for item in items:
-            price = f'${item[3]}' if item[3] and item[3].isdigit() else (item[3] if item[3] else "Call for price")
-            category_icon = {'Jobs':'💼','For Sale':'🏷️','Housing':'🏠','Services':'🔧','Garage Sale':'🏪'}.get(item[6] if item[6] else '', '📋')
+            price = f'${item["price"]}' if item["price"] and item["price"].isdigit() else (item["price"] if item["price"] else "Call for price")
+            category_icon = {'Jobs':'💼','For Sale':'🏷️','Housing':'🏠','Services':'🔧','Garage Sale':'🏪'}.get(item["category"] or '', '📋')
             classifieds_html += f'''
             <div class="classified-card">
-                <div class="classified-badge">{category_icon} {item[6] if item[6] else "General"}</div>
-                <h3>{item[1]}</h3>
+                <div class="classified-badge">{category_icon} {item["category"] or "General"}</div>
+                <h3>{item["title"]}</h3>
                 <div class="classified-price">{price}</div>
-                <p>{item[2][:150]}...</p>
-                <div class="classified-contact"><i class="fas fa-user"></i> {item[4]} | <i class="fas fa-calendar"></i> {item[5]}</div>
-                <a href="/classified/{item[0]}" class="btn-small">View Details →</a>
+                <p>{item["description"][:150]}...</p>
+                <div class="classified-contact"><i class="fas fa-user"></i> {item["contact"]} | <i class="fas fa-calendar"></i> {item["date"]}</div>
+                <a href="/classified/{item["id"]}" class="btn-small">View Details →</a>
             </div>
             '''
     else:
@@ -942,33 +929,33 @@ def classifieds():
 
 @app.route('/classified/<int:id>')
 def classified_detail(id):
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, title, description, price, contact, email, phone, date, category FROM classifieds WHERE id = ? AND active = 1", (id,))
+    cursor.execute("SELECT id, title, description, price, contact, email, phone, date, category FROM classifieds WHERE id = %s AND active = TRUE", (id,))
     item = cursor.fetchone()
     conn.close()
-    
+
     if not item:
         return redirect('/classifieds')
-    
-    category_icon = {'Jobs':'💼','For Sale':'🏷️','Housing':'🏠','Services':'🔧','Garage Sale':'🏪'}.get(item[8] if item[8] else '', '📋')
+
+    category_icon = {'Jobs':'💼','For Sale':'🏷️','Housing':'🏠','Services':'🔧','Garage Sale':'🏪'}.get(item["category"] or '', '📋')
     return f'''
     <!DOCTYPE html>
     <html>
-    <head><title>{item[1]} - Classified Ad</title><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <head><title>{item["title"]} - Classified Ad</title><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>body{{font-family:Georgia;background:#f9f9f5;margin:0}}.container{{max-width:600px;margin:40px auto;background:white;padding:30px;border-radius:10px;box-shadow:0 4px 15px rgba(0,0,0,0.1)}}.price{{color:#D4A017;font-size:28px;font-weight:bold;margin:20px 0}}.contact{{background:#f5f5f5;padding:20px;border-radius:8px;margin:20px 0}}.btn{{background:#1a3d1a;color:white;padding:12px 24px;border-radius:5px;text-decoration:none;display:inline-block}}.badge{{display:inline-block;background:#D4A017;color:#1a3d1a;padding:5px 15px;border-radius:20px;font-size:12px;margin-bottom:15px}}</style>
     </head>
     <body>
         <div class="container">
-            <div class="badge">{category_icon} {item[8] if item[8] else "General"}</div>
-            <h1>{item[1]}</h1>
-            <div class="price">{item[3] if item[3] else "Price not specified"}</div>
-            <p>{item[2]}</p>
+            <div class="badge">{category_icon} {item["category"] or "General"}</div>
+            <h1>{item["title"]}</h1>
+            <div class="price">{item["price"] or "Price not specified"}</div>
+            <p>{item["description"]}</p>
             <div class="contact">
                 <h3><i class="fas fa-address-card"></i> Contact Information</h3>
-                <p><i class="fas fa-phone"></i> {item[4]}</p>
-                <p><i class="fas fa-envelope"></i> {item[5] if item[5] else "Not provided"}</p>
-                <p><i class="fas fa-mobile-alt"></i> {item[6] if item[6] else "Not provided"}</p>
+                <p><i class="fas fa-phone"></i> {item["contact"]}</p>
+                <p><i class="fas fa-envelope"></i> {item["email"] or "Not provided"}</p>
+                <p><i class="fas fa-mobile-alt"></i> {item["phone"] or "Not provided"}</p>
             </div>
             <a href="/classifieds" class="btn"><i class="fas fa-arrow-left"></i> Back to Classifieds</a>
         </div>
@@ -980,10 +967,10 @@ def classified_detail(id):
 def post_ad():
     if request.method == 'POST':
         expiry_date = date.today() + timedelta(days=30)
-        conn = sqlite3.connect(DB_PATH)
+        conn = get_db()
         cursor = conn.cursor()
         cursor.execute('''INSERT INTO classifieds (category, title, description, price, contact, email, phone, date, expiry_date, active)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)''',
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE)''',
                       (request.form.get('category'), request.form.get('title'), request.form.get('description'),
                        request.form.get('price'), request.form.get('contact'), request.form.get('email'),
                        request.form.get('phone'), date.today(), expiry_date))
@@ -1347,14 +1334,11 @@ def inquire():
         phone = request.form.get('phone', '')
         package_interest = request.form.get('package_interest', '')
         message = request.form.get('message', '')
-        conn = sqlite3.connect(DB_PATH)
+        conn = get_db()
         cursor = conn.cursor()
-        cursor.execute('''CREATE TABLE IF NOT EXISTS ad_inquiries
-            (id INTEGER PRIMARY KEY AUTOINCREMENT, business_name TEXT, contact_name TEXT,
-             email TEXT, phone TEXT, package_interest TEXT, message TEXT, date DATE, status TEXT)''')
         cursor.execute('''INSERT INTO ad_inquiries
             (business_name, contact_name, email, phone, package_interest, message, date, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)''',
             (business_name, contact_name, email, phone, package_interest, message, datetime.now().date(), 'new'))
         conn.commit()
         conn.close()
@@ -1408,8 +1392,9 @@ def do_subscribe():
         return redirect('/subscribe')
     try:
         conn = get_db()
-        conn.execute("INSERT OR IGNORE INTO subscribers (name, email, subscribed_date) VALUES (?,?,?)",
-                     (name, email, datetime.now().date().isoformat()))
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO subscribers (name, email, subscribed_date) VALUES (%s,%s,%s) ON CONFLICT (email) DO NOTHING",
+                       (name, email, datetime.now().date().isoformat()))
         conn.commit()
         conn.close()
     except Exception as e:
@@ -1430,22 +1415,23 @@ def search():
     results = []
     if q:
         conn = get_db()
+        cursor = conn.cursor()
         try:
-            articles = conn.execute(
-                "SELECT id, title, content, date FROM news_articles WHERE active=1 AND (title LIKE ? OR content LIKE ?) ORDER BY date DESC LIMIT 20",
+            cursor.execute(
+                "SELECT id, title, content, date FROM news_articles WHERE active=TRUE AND (title LIKE %s OR content LIKE %s) ORDER BY date DESC LIMIT 20",
                 (f'%{q}%', f'%{q}%')
-            ).fetchall()
-            for a in articles:
+            )
+            for a in cursor.fetchall():
                 results.append({'type': 'News', 'id': a['id'], 'title': a['title'],
                                  'snippet': (a['content'] or '')[:150] + '...', 'url': f'/article/{a["id"]}'})
         except Exception as e:
             print(f"Search news error: {e}")
         try:
-            ads = conn.execute(
-                "SELECT id, title, description, category FROM classifieds WHERE active=1 AND (title LIKE ? OR description LIKE ?) ORDER BY date DESC LIMIT 10",
+            cursor.execute(
+                "SELECT id, title, description, category FROM classifieds WHERE active=TRUE AND (title LIKE %s OR description LIKE %s) ORDER BY date DESC LIMIT 10",
                 (f'%{q}%', f'%{q}%')
-            ).fetchall()
-            for a in ads:
+            )
+            for a in cursor.fetchall():
                 results.append({'type': 'Classified', 'id': a['id'], 'title': a['title'],
                                  'snippet': (a['description'] or '')[:150] + '...', 'url': f'/classified/{a["id"]}'})
         except Exception as e:
@@ -1494,8 +1480,9 @@ def submit_tip():
         if tip:
             try:
                 conn = get_db()
-                conn.execute("INSERT INTO news_tips (name, email, tip, date, status) VALUES (?,?,?,?,?)",
-                             (name, email, tip, datetime.now().date().isoformat(), 'pending'))
+                cursor = conn.cursor()
+                cursor.execute("INSERT INTO news_tips (name, email, tip, date, status) VALUES (%s,%s,%s,%s,%s)",
+                               (name, email, tip, datetime.now().date().isoformat(), 'pending'))
                 conn.commit()
                 conn.close()
             except Exception as e:
@@ -1573,10 +1560,10 @@ def submit_photo():
 @app.route('/business-directory')
 def business_directory():
     conn = get_db()
+    cursor = conn.cursor()
     try:
-        businesses = conn.execute(
-            "SELECT * FROM businesses ORDER BY name ASC"
-        ).fetchall()
+        cursor.execute("SELECT * FROM businesses ORDER BY name ASC")
+        businesses = cursor.fetchall()
     except Exception:
         businesses = []
     conn.close()
@@ -1648,12 +1635,9 @@ def submit_business():
         if name:
             try:
                 conn = get_db()
-                conn.execute('''CREATE TABLE IF NOT EXISTS businesses
-                    (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, category TEXT,
-                     description TEXT, phone TEXT, email TEXT, website TEXT,
-                     address TEXT, date TEXT)''')
-                conn.execute('''INSERT INTO businesses (name, category, description, phone, email, website, address, date)
-                    VALUES (?,?,?,?,?,?,?,?)''',
+                cursor = conn.cursor()
+                cursor.execute('''INSERT INTO businesses (name, category, description, phone, email, website, address, date)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s)''',
                     (name, category, description, phone, email, website, address, datetime.now().date().isoformat()))
                 conn.commit()
                 conn.close()
@@ -1714,12 +1698,11 @@ def submit_business():
 def api_public_news():
     """Public aggregated news feed used by the AI crew."""
     conn = get_db()
+    cursor = conn.cursor()
     try:
-        articles = conn.execute(
-            "SELECT title, content, source, date FROM news_articles WHERE active=1 ORDER BY date DESC LIMIT 20"
-        ).fetchall()
-        result = [{'title': a['title'], 'source': a.get('source','Spruce Grove Gazette'),
-                   'published_at': a['date']} for a in articles]
+        cursor.execute("SELECT title, content, source, date FROM news_articles WHERE active=TRUE ORDER BY date DESC LIMIT 20")
+        result = [{'title': a['title'], 'source': a.get('source', 'Spruce Grove Gazette'),
+                   'published_at': str(a['date'])} for a in cursor.fetchall()]
     except Exception as e:
         print(f"API public-news error: {e}")
         result = []
@@ -1729,11 +1712,10 @@ def api_public_news():
 @app.route('/api/news')
 def api_news():
     conn = get_db()
+    cursor = conn.cursor()
     try:
-        articles = conn.execute(
-            "SELECT id, title, content, image_url, date FROM news_articles WHERE active=1 ORDER BY date DESC LIMIT 50"
-        ).fetchall()
-        result = [dict(a) for a in articles]
+        cursor.execute("SELECT id, title, content, image_url, date FROM news_articles WHERE active=TRUE ORDER BY date DESC LIMIT 50")
+        result = [dict(a) for a in cursor.fetchall()]
     except Exception as e:
         print(f"API news error: {e}")
         result = []
@@ -1743,11 +1725,10 @@ def api_news():
 @app.route('/api/events')
 def api_events():
     conn = get_db()
+    cursor = conn.cursor()
     try:
-        events = conn.execute(
-            "SELECT * FROM events WHERE approved=1 ORDER BY date ASC LIMIT 30"
-        ).fetchall()
-        result = [dict(e) for e in events]
+        cursor.execute("SELECT * FROM events WHERE approved=TRUE ORDER BY date ASC LIMIT 30")
+        result = [dict(e) for e in cursor.fetchall()]
     except Exception as e:
         print(f"API events error: {e}")
         result = []
@@ -1786,12 +1767,12 @@ def api_publish_article():
         category = 'News'
 
     now = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db()
     cursor = conn.cursor()
 
     # Deduplicate by title within last 48 hours
     cursor.execute(
-        "SELECT id FROM news_articles WHERE title=? AND date >= datetime('now','-2 days')",
+        "SELECT id FROM news_articles WHERE title=%s AND date >= NOW() - INTERVAL '2 days'",
         (title,)
     )
     if cursor.fetchone():
@@ -1801,11 +1782,11 @@ def api_publish_article():
     cursor.execute(
         '''INSERT INTO news_articles
            (title, content, summary, source, author, date, category, featured, active, url, views)
-           VALUES (?,?,?,?,?,?,?,0,1,?,0)''',
+           VALUES (%s,%s,%s,%s,%s,%s,%s,FALSE,TRUE,%s,0) RETURNING id''',
         (title, content, summary, source, author, now, category, url)
     )
+    article_id = cursor.fetchone()['id']
     conn.commit()
-    article_id = cursor.lastrowid
     conn.close()
 
     return jsonify({'id': article_id, 'title': title, 'category': category, 'status': 'published'}), 201
