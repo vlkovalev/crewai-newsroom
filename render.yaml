@@ -1,0 +1,43 @@
+services:
+  - type: web
+    name: spruce-grove-gazette
+    env: python
+    region: oregon
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn web_app:app --workers 1 --timeout 120
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: TZ
+        value: America/Edmonton
+      - key: SCHEDULER_ENABLED
+        value: "0"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: GAZETTE_API_KEY
+        sync: false
+      - key: OPENWEATHER_API_KEY
+        sync: false
+      - key: PAYPAL_CLIENT_ID
+        sync: false
+      - key: GA_MEASUREMENT_ID
+        sync: false
+
+  - type: cron
+    name: spruce-grove-news-bot
+    env: python
+    region: oregon
+    plan: starter
+    buildCommand: pip install -r requirements.txt
+    startCommand: python news_crew_enhanced.py
+    schedule: "0 11 * * *"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: SCHEDULER_ENABLED
+        value: "0"
+      - key: GAZETTE_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
