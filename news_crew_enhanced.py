@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-Standalone cron script — generates 3 Spruce Grove articles via Gemini API
+Standalone cron script — generates 3 Spruce Grove articles via OpenAI API
 and inserts them into gazette.db. Run by Render Cron Job daily.
 
 Usage: python news_crew_enhanced.py
-Requires: GEMINI_API_KEY env var
+Requires: OPENAI_API_KEY env var
 """
 
 import os
@@ -16,14 +16,15 @@ from datetime import datetime
 from pathlib import Path
 
 DB_PATH = Path(__file__).parent / 'gazette.db'
+OPENAI_URL = 'https://api.openai.com/v1/chat/completions'
 
 TOPIC_ROTATION = [
-    ('Community',    'a community event, neighbourhood initiative, or local volunteer story in Spruce Grove, Alberta'),
-    ('News',         'a local government update, city council decision, or infrastructure project in Spruce Grove, Alberta'),
-    ('Sports',       'a youth or amateur sports story, local team result, or recreation program in Spruce Grove, Alberta'),
+    ('Community',     'a community event, neighbourhood initiative, or local volunteer story in Spruce Grove, Alberta'),
+    ('News',          'a local government update, city council decision, or infrastructure project in Spruce Grove, Alberta'),
+    ('Sports',        'a youth or amateur sports story, local team result, or recreation program in Spruce Grove, Alberta'),
     ('Arts & Culture','a local arts event, cultural festival, library program, or creative community story in Spruce Grove, Alberta'),
-    ('Business',     'a new business opening, local entrepreneur story, or economic development update in Spruce Grove, Alberta'),
-    ('Opinion',      'an editorial opinion piece about life, growth, or community values in Spruce Grove, Alberta'),
+    ('Business',      'a new business opening, local entrepreneur story, or economic development update in Spruce Grove, Alberta'),
+    ('Opinion',       'an editorial opinion piece about life, growth, or community values in Spruce Grove, Alberta'),
 ]
 
 INDEX_FILE = Path(__file__).parent / '.topic_index'
@@ -44,14 +45,17 @@ def save_topic_index(n):
 
 
 def generate_daily_articles():
-    api_key = os.environ.get('GEMINI_API_KEY', '')
+    api_key = os.environ.get('OPENAI_API_KEY', '')
     if not api_key:
-        print('[ERROR] GEMINI_API_KEY not set')
+        print('[ERROR] OPENAI_API_KEY not set')
         return False
 
-    url = f'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}'
     today = datetime.utcnow().strftime('%B %d, %Y')
     now = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+    headers = {
+        'Authorization': f'Bearer {api_key}',
+        'Content-Type': 'application/json',
+    }
 
     topic_index = load_topic_index()
     conn = sqlite3.connect(DB_PATH)
@@ -66,7 +70,7 @@ def generate_daily_articles():
             f'You are a staff writer for the Spruce Grove Gazette, a community newspaper '
             f'in Spruce Grove, Alberta, Canada. Today is {today}. '
             f'Write a realistic, engaging local news article about {topic_desc}. '
-            f'Use specific Spruce Grove locations, street names, parks, or venues. '
+            f'Use specific Spruce Grove locations, street names, parks, or venues to make it feel authentic. '
             f'Respond ONLY with valid JSON in this exact format:\n'
             f'{{"title": "...", "summary": "One sentence, max 150 chars.", '
             f'"content": "Full article body, 3-5 paragraphs separated by blank lines.", '
@@ -75,25 +79,25 @@ def generate_daily_articles():
 
         try:
             resp = requests.post(
-                url,
+                OPENAI_URL,
+                headers=headers,
                 json={
-                    'contents': [{'parts': [{'text': prompt}]}],
-                    'generationConfig': {'temperature': 0.85, 'maxOutputTokens': 1024}
+                    'model': 'gpt-4o-mini',
+                    'messages': [{'role': 'user', 'content': prompt}],
+                    'temperature': 0.85,
+                    'max_tokens': 1024,
+                    'response_format': {'type': 'json_object'},
                 },
-                timeout=20
+                timeout=30
             )
 
             if resp.status_code != 200:
-                print(f'[ERROR] Gemini {resp.status_code}: {resp.text[:200]}')
+                print(f'[ERROR] OpenAI {resp.status_code}: {resp.text[:200]}')
                 continue
 
-            text = resp.json()['candidates'][0]['content']['parts'][0]['text'].strip()
-            if text.startswith('```'):
-                parts = text.split('```')
-                text = parts[1][4:] if parts[1].startswith('json') else parts[1]
-            text = text.strip()
-
+            text = resp.json()['choices'][0]['message']['content'].strip()
             data = json.loads(text)
+
             title   = data.get('title', '').strip()
             summary = data.get('summary', '').strip()[:400]
             content = data.get('content', '').strip()
@@ -116,7 +120,7 @@ def generate_daily_articles():
         except json.JSONDecodeError as e:
             print(f'[ERROR] JSON parse error: {e}')
         except requests.exceptions.Timeout:
-            print('[ERROR] Gemini API timed out')
+            print('[ERROR] OpenAI API timed out')
         except requests.exceptions.RequestException as e:
             print(f'[ERROR] Request error: {e}')
         except Exception as e:
