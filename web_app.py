@@ -264,7 +264,10 @@ if os.environ.get('SCHEDULER_ENABLED', '1') == '1':
 
 # ============= ROUTES =============
 
-_SW_CLEANUP = (
+_HEAD_INJECT = (
+    b'<link rel="icon" href="data:image/svg+xml,'
+    b'%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E'
+    b'%3Ctext y=%27.9em%27 font-size=%2790%27%3E%F0%9F%93%B0%3C/text%3E%3C/svg%3E">'
     b'<script>if("serviceWorker"in navigator){'
     b'navigator.serviceWorker.getRegistrations()'
     b'.then(function(r){for(var s of r)s.unregister();});'
@@ -274,10 +277,15 @@ _SW_CLEANUP = (
 )
 
 @app.after_request
-def inject_sw_cleanup(response):
+def inject_head(response):
     if 'text/html' in response.content_type:
-        response.data = response.data.replace(b'</head>', _SW_CLEANUP + b'</head>', 1)
+        response.data = response.data.replace(b'</head>', _HEAD_INJECT + b'</head>', 1)
     return response
+
+
+@app.route('/favicon.ico')
+def favicon():
+    return '', 204
 
 
 @app.route('/')
