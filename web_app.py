@@ -325,39 +325,65 @@ def get_db():
 # Initialize database
 init_database()
 
-# ============= AUTO NEWS UPDATER =============
-def scheduled_news_update():
-    """Function that runs at scheduled times to fetch news"""
-    print(f"[{datetime.now()}] 📰 Running scheduled news update...")
-    
-    try:
-        # Import your news gatherer
-        from news_gatherer_real import RealNewsGatherer
-        gatherer = RealNewsGatherer()
-        count = gatherer.gather_all_news()
-        print(f"[{datetime.now()}] ✅ News update complete! Added {count} articles")
-        return count
-    except Exception as e:
-        print(f"[{datetime.now()}] ❌ News update error: {e}")
-        return 0
+# ============= AUTOMATED SCHEDULER =============
+# All jobs write directly to Postgres — no self-HTTP calls, no deadlock risk.
+# Times are UTC. Spruce Grove is UTC-6 (MDT) / UTC-7 (MST).
+#   07:00 UTC = 1 AM MDT  (overnight AI batch)
+#   13:00 UTC = 7 AM MDT  (morning AI + RSS)
+#   18:00 UTC = 12 PM MDT (noon RSS)
+#   23:00 UTC = 5 PM MDT  (evening AI + RSS)
+#   05:00 UTC = 11 PM MDT (nightly maintenance)
 
-if os.environ.get('SCHEDULER_ENABLED', '1') == '1':
-    scheduler = BackgroundScheduler()
-    scheduler.add_job(
-        func=scheduled_news_update,
-        trigger=CronTrigger(hour=6, minute=0),
-        id='daily_news_update',
-        name='Daily News Update at 6 AM'
-    )
-    scheduler.add_job(
-        func=scheduled_news_update,
-        trigger=CronTrigger(hour=12, minute=0),
-        id='noon_news_update',
-        name='Noon News Update'
-    )
+def _job_ai_generation():
+    """Generate AI articles using OpenAI. Writes directly to DB."""
+    print(f'[SCHEDULER] AI generation starting at {datetime.utcnow().isoformat()}')
+    try:
+        from news_crew_enhanced import generate_daily_articles
+        generate_daily_articles()
+    except Exception as e:
+        print(f'[SCHEDULER] AI generation error: {e}')
+
+
+def _job_rss_scraper():
+    """Fetch and publish RSS news from regional sources."""
+    print(f'[SCHEDULER] RSS scraper starting at {datetime.utcnow().isoformat()}')
+    try:
+        from news_scraper import run_scraper
+        count = run_scraper()
+        print(f'[SCHEDULER] RSS scraper done: {count} articles')
+    except Exception as e:
+        print(f'[SCHEDULER] RSS scraper error: {e}')
+
+
+def _job_maintenance():
+    """Score decay, FTS update, stats."""
+    print(f'[SCHEDULER] Maintenance starting at {datetime.utcnow().isoformat()}')
+    try:
+        from maintenance import run_maintenance
+        run_maintenance()
+    except Exception as e:
+        print(f'[SCHEDULER] Maintenance error: {e}')
+
+
+if os.environ.get('SCHEDULER_ENABLED', '0') == '1':
+    scheduler = BackgroundScheduler(timezone='UTC')
+
+    # AI article generation — 3× daily
+    scheduler.add_job(_job_ai_generation, CronTrigger(hour=7,  minute=0),  id='ai_morning',  replace_existing=True)
+    scheduler.add_job(_job_ai_generation, CronTrigger(hour=13, minute=0),  id='ai_noon',     replace_existing=True)
+    scheduler.add_job(_job_ai_generation, CronTrigger(hour=23, minute=0),  id='ai_evening',  replace_existing=True)
+
+    # RSS scraping — 3× daily (offset from AI runs so they don't overlap)
+    scheduler.add_job(_job_rss_scraper,   CronTrigger(hour=13, minute=30), id='rss_morning', replace_existing=True)
+    scheduler.add_job(_job_rss_scraper,   CronTrigger(hour=18, minute=0),  id='rss_noon',    replace_existing=True)
+    scheduler.add_job(_job_rss_scraper,   CronTrigger(hour=23, minute=30), id='rss_evening', replace_existing=True)
+
+    # Nightly maintenance — 11 PM MDT
+    scheduler.add_job(_job_maintenance,   CronTrigger(hour=5,  minute=0),  id='maintenance', replace_existing=True)
+
     scheduler.start()
-    print("Auto-news scheduler started")
-# ============= END AUTO NEWS UPDATER =============
+    print('[SCHEDULER] Started — AI 3×/day, RSS 3×/day, maintenance nightly')
+# ============= END SCHEDULER =============
 
 # ============= ROUTES =============
 
@@ -383,6 +409,11 @@ def inject_head(response):
 @app.route('/favicon.ico')
 def favicon():
     return '', 204
+
+
+@app.route('/health')
+def health():
+    return jsonify({'status': 'ok', 'ts': datetime.utcnow().isoformat()}), 200
 
 
 @app.route('/')
