@@ -450,6 +450,16 @@ def home():
             shown += 1
         if not news_html:
             news_html = '<p>No news articles yet. Check back soon!</p>'
+
+        urgent_section = (
+            '<div class="urgent-banner"><div class="urgent-banner-title">&#x1F6A8; Breaking News</div>'
+            + urgent_html + '</div>'
+        ) if urgent_html else ''
+
+        top_section = (
+            '<h2 class="section-title"><i class="fas fa-star"></i> Top Stories</h2>'
+            '<div class="top-stories-grid">' + top_html + '</div>'
+        ) if top_html else ''
         
         # Build classifieds HTML
         classifieds_html = ""
@@ -581,10 +591,7 @@ def home():
                 <a href="/advertise"><i class="fas fa-bullhorn"></i> ADVERTISE</a>
                 <a href="/support" style="background:#D4A017;color:#1a3d1a;padding:5px 12px;border-radius:20px;"><i class="fas fa-star"></i> SUPPORT</a>
             </div>
-            {f'''<div class="urgent-banner">
-                <div class="urgent-banner-title">🚨 Breaking News</div>
-                {urgent_html}
-            </div>''' if urgent_html else ''}
+            {urgent_section}
             <div class="hero">
                 <h2>Your Hometown, Online.</h2>
                 <p>Serving Spruce Grove, Stony Plain & Parkland County</p>
@@ -628,7 +635,7 @@ def home():
                     <a href="/subscribe" class="btn"><i class="fas fa-envelope"></i> Subscribe to Newsletter →</a>
                 </div>
                 
-                {f'<h2 class="section-title"><i class="fas fa-star"></i> Top Stories</h2><div class="top-stories-grid">{top_html}</div>' if top_html else ''}
+                {top_section}
                 <h2 class="section-title"><i class="fas fa-building"></i> Latest News</h2>
                 <div class="news-grid">{news_html}</div>
                 
