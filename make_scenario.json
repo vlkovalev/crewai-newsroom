@@ -1,0 +1,183 @@
+{
+  "name": "Spruce Grove Gazette — Daily News Automation",
+  "flow": [
+    {
+      "id": 1,
+      "module": "util:SetVariables",
+      "version": 1,
+      "metadata": { "designer": { "x": 0, "y": 0 } },
+      "parameters": {},
+      "mapper": {
+        "variables": [
+          { "name": "gazette_api_url",  "value": "https://sprucegrovegazette.com/api/publish-article" },
+          { "name": "gazette_api_key",  "value": "{{GAZETTE_API_KEY}}" },
+          { "name": "gemini_api_key",   "value": "{{GEMINI_API_KEY}}" },
+          { "name": "cutoff_hours",     "value": "24" }
+        ]
+      }
+    },
+    {
+      "id": 2,
+      "module": "rss:ReadFeed",
+      "version": 1,
+      "metadata": {
+        "designer": { "x": 300, "y": -200 },
+        "expect": [ { "name": "url", "type": "url", "label": "Feed URL" } ]
+      },
+      "parameters": { "url": "https://sprucegroveexaminer.com/feed/" },
+      "filter": {
+        "name": "Examiner only",
+        "conditions": [[ { "a": "{{2.pubDate}}", "o": "date:after", "b": "{{addHours(now; -24)}}" } ]]
+      }
+    },
+    {
+      "id": 3,
+      "module": "rss:ReadFeed",
+      "version": 1,
+      "metadata": {
+        "designer": { "x": 300, "y": 0 },
+        "expect": [ { "name": "url", "type": "url", "label": "Feed URL" } ]
+      },
+      "parameters": { "url": "https://www.sprucegrove.org/news-events/news/?format=rss" }
+    },
+    {
+      "id": 4,
+      "module": "rss:ReadFeed",
+      "version": 1,
+      "metadata": { "designer": { "x": 300, "y": 200 } },
+      "parameters": { "url": "https://www.rcmp-grc.gc.ca/api/v1/news/rss?lang=en&location=AB" }
+    },
+    {
+      "id": 5,
+      "module": "rss:ReadFeed",
+      "version": 1,
+      "metadata": { "designer": { "x": 300, "y": 400 } },
+      "parameters": { "url": "https://www.psd.ca/news?format=rss" }
+    },
+    {
+      "id": 6,
+      "module": "rss:ReadFeed",
+      "version": 1,
+      "metadata": { "designer": { "x": 300, "y": 600 } },
+      "parameters": { "url": "https://www.parklandcounty.com/en/news/rss.aspx" }
+    },
+    {
+      "id": 7,
+      "module": "flow:Aggregator",
+      "version": 1,
+      "metadata": { "designer": { "x": 600, "y": 200 } },
+      "parameters": {
+        "moduleId": [2, 3, 4, 5, 6],
+        "target": "7",
+        "groupBy": "",
+        "stopProcessing": false
+      },
+      "mapper": {
+        "title":       "{{item.title}}",
+        "link":        "{{item.link}}",
+        "summary":     "{{item.description}}",
+        "pubDate":     "{{item.pubDate}}",
+        "source_name": "{{item.source.title}}"
+      }
+    },
+    {
+      "id": 8,
+      "module": "flow:BasicFilter",
+      "version": 1,
+      "metadata": { "designer": { "x": 900, "y": 200 }, "label": "Filter: last 24 h + local keywords" },
+      "filter": {
+        "name": "Fresh and local",
+        "conditions": [
+          [
+            { "a": "{{8.pubDate}}", "o": "date:after", "b": "{{addHours(now; -24)}}" },
+            {
+              "a": "{{lower(8.title)}}{{lower(8.summary)}}",
+              "o": "text:contain",
+              "b": "spruce grove"
+            }
+          ],
+          [
+            { "a": "{{8.pubDate}}", "o": "date:after", "b": "{{addHours(now; -24)}}" },
+            { "a": "{{lower(8.title)}}{{lower(8.summary)}}", "o": "text:contain", "b": "parkland" }
+          ],
+          [
+            { "a": "{{8.pubDate}}", "o": "date:after", "b": "{{addHours(now; -24)}}" },
+            { "a": "{{lower(8.title)}}{{lower(8.summary)}}", "o": "text:contain", "b": "parkland school" }
+          ]
+        ]
+      }
+    },
+    {
+      "id": 9,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "metadata": { "designer": { "x": 1200, "y": 200 }, "label": "Gemini: Summarise + classify" },
+      "parameters": { "handleErrors": true },
+      "mapper": {
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent",
+        "method": "POST",
+        "headers": [
+          { "name": "Content-Type", "value": "application/json" },
+          { "name": "x-goog-api-key", "value": "{{1.gemini_api_key}}" }
+        ],
+        "bodyType": "raw",
+        "contentType": "application/json",
+        "body": "{\n  \"contents\": [{\n    \"parts\": [{\n      \"text\": \"You are a local news editor for the Spruce Grove Gazette in Alberta, Canada.\\n\\nOriginal headline: {{8.title}}\\nOriginal snippet: {{8.summary}}\\nSource: {{8.source_name}}\\nURL: {{8.link}}\\n\\nRules:\\n1. Write a 2-3 paragraph original summary (do NOT copy the original text).\\n2. Attribute every fact to the source.\\n3. Choose ONE category from: News, Community, Sports, Business, Arts & Culture, Public Safety, Events, Health, Education, Opinion.\\n4. Rate risk: low (events/announcements), medium (politics/disputes), high (crime/courts/accidents/health alerts).\\n5. If risk is HIGH, set publish to false.\\n\\nRespond ONLY with valid JSON:\\n{\\\"title\\\": \\\"Original headline (rewritten)\\\",\\n \\\"summary\\\": \\\"One sentence teaser max 150 chars\\\",\\n \\\"content\\\": \\\"Full 2-3 paragraph article body\\\",\\n \\\"category\\\": \\\"Category\\\",\\n \\\"risk\\\": \\\"low|medium|high\\\",\\n \\\"publish\\\": true|false,\\n \\\"source\\\": \\\"{{8.source_name}}\\\",\\n \\\"source_url\\\": \\\"{{8.link}}\\\"}\"\n    }]\n  }],\n  \"generationConfig\": {\"temperature\": 0.4, \"maxOutputTokens\": 1024}\n}",
+        "parseResponse": true
+      }
+    },
+    {
+      "id": 10,
+      "module": "flow:BasicFilter",
+      "version": 1,
+      "metadata": { "designer": { "x": 1500, "y": 200 }, "label": "Filter: publish=true only" },
+      "filter": {
+        "name": "Auto-publish allowed",
+        "conditions": [[
+          { "a": "{{9.data.candidates[0].content.parts[0].text}}", "o": "text:contain", "b": "\"publish\": true" }
+        ]]
+      }
+    },
+    {
+      "id": 11,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "metadata": { "designer": { "x": 1800, "y": 200 }, "label": "POST to Gazette API" },
+      "parameters": { "handleErrors": true },
+      "mapper": {
+        "url": "{{1.gazette_api_url}}",
+        "method": "POST",
+        "headers": [
+          { "name": "Content-Type", "value": "application/json" },
+          { "name": "X-Api-Key",    "value": "{{1.gazette_api_key}}" }
+        ],
+        "bodyType": "raw",
+        "contentType": "application/json",
+        "body": "{{9.data.candidates[0].content.parts[0].text}}"
+      }
+    }
+  ],
+  "metadata": {
+    "instant": false,
+    "version": 1,
+    "scenario": {
+      "roundtrips": 1,
+      "maxErrors": 3,
+      "autoCommit": true,
+      "autoCommitTriggerLast": true,
+      "sequential": false,
+      "slots": null,
+      "confidential": false,
+      "dataloss": false,
+      "dlq": false,
+      "freshVariables": false
+    },
+    "designer": { "orphans": [] },
+    "scheduling": {
+      "type": "cron",
+      "interval": 86400,
+      "time": "06:00",
+      "timezone": "America/Edmonton"
+    }
+  }
+}

@@ -25,6 +25,7 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 # API Keys from environment variables
 PAYPAL_CLIENT_ID = os.environ.get('PAYPAL_CLIENT_ID', 'sb')
 OPENWEATHER_API_KEY = os.environ.get('OPENWEATHER_API_KEY', '')
+GAZETTE_API_KEY = os.environ.get('GAZETTE_API_KEY', '')
 
 DB_PATH = 'gazette.db'
 
@@ -1752,6 +1753,63 @@ def api_events():
         result = []
     conn.close()
     return jsonify(result)
+
+# ─────────────────────────────────────────
+# Publish API — used by Make.com automation
+# ─────────────────────────────────────────
+
+VALID_CATEGORIES = {'News', 'Community', 'Sports', 'Business', 'Arts & Culture',
+                    'Public Safety', 'Events', 'Health', 'Education', 'Opinion'}
+
+@app.route('/api/publish-article', methods=['POST'])
+def api_publish_article():
+    key = request.headers.get('X-Api-Key', '')
+    if not GAZETTE_API_KEY or key != GAZETTE_API_KEY:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({'error': 'Invalid JSON body'}), 400
+
+    title    = (data.get('title') or '').strip()[:200]
+    content  = (data.get('content') or '').strip()
+    summary  = (data.get('summary') or '').strip()[:400]
+    category = (data.get('category') or 'News').strip()
+    source   = (data.get('source') or '').strip()[:200]
+    author   = (data.get('author') or 'Gazette Newsroom').strip()[:100]
+    url      = (data.get('source_url') or '').strip()[:500]
+
+    if not title or not content or not source:
+        return jsonify({'error': 'title, content, and source are required'}), 400
+
+    if category not in VALID_CATEGORIES:
+        category = 'News'
+
+    now = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    # Deduplicate by title within last 48 hours
+    cursor.execute(
+        "SELECT id FROM news_articles WHERE title=? AND date >= datetime('now','-2 days')",
+        (title,)
+    )
+    if cursor.fetchone():
+        conn.close()
+        return jsonify({'status': 'duplicate', 'message': 'Article with this title already published recently'}), 200
+
+    cursor.execute(
+        '''INSERT INTO news_articles
+           (title, content, summary, source, author, date, category, featured, active, url, views)
+           VALUES (?,?,?,?,?,?,?,0,1,?,0)''',
+        (title, content, summary, source, author, now, category, url)
+    )
+    conn.commit()
+    article_id = cursor.lastrowid
+    conn.close()
+
+    return jsonify({'id': article_id, 'title': title, 'category': category, 'status': 'published'}), 201
+
 
 # ─────────────────────────────────────────
 # Service Worker — self-unregistering
