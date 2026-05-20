@@ -1116,7 +1116,7 @@ def _support_html():
             .footer { background: #0d260d; color: white; text-align: center; padding: 30px; margin-top: 40px; }
             @media (max-width: 768px) { .pricing-grid { grid-template-columns: 1fr; } .impact-grid { grid-template-columns: 1fr; } }
         </style>
-        <script src="https://www.paypal.com/sdk/js?client-id=__PAYPAL_CLIENT_ID__&currency=CAD&vault=true&intent=subscription"></script>
+        <script src="https://www.paypal.com/sdk/js?client-id=__PAYPAL_CLIENT_ID__&currency=CAD"></script>
     </head>
     <body>
         <div class="header">
@@ -1146,7 +1146,10 @@ def _support_html():
                         <li><i class="fas fa-check"></i> Weekly exclusive content</li>
                         <li><i class="fas fa-check"></i> Behind-the-scenes updates</li>
                     </ul>
-                    <div class="paypal-container" id="paypal-monthly"></div>
+                    <a href="https://www.paypal.com/webapps/billing/plans/subscribe?plan_id=P-8WS19802N5406432ENHWAJVY"
+                       target="_blank" class="btn" style="background:#0070ba;margin-top:15px;">
+                        <img src="https://www.paypalobjects.com/webstatic/en_US/i/buttons/PP_logo_h_100x26.png" alt="PayPal" style="height:18px;vertical-align:middle;margin-right:6px;">Subscribe $5/mo
+                    </a>
                 </div>
                 <div class="pricing-card donation-card">
                     <div class="donation-badge">❤️ MAKE A DONATION</div>
@@ -1176,7 +1179,10 @@ def _support_html():
                         <li><i class="fas fa-check"></i> Annual supporter event</li>
                         <li><i class="fas fa-check"></i> Input on coverage priorities</li>
                     </ul>
-                    <div class="paypal-container" id="paypal-yearly"></div>
+                    <a href="https://www.paypal.com/webapps/billing/plans/subscribe?plan_id=P-9BL3287175752125FNHWAKYY"
+                       target="_blank" class="btn" style="background:#0070ba;margin-top:15px;">
+                        <img src="https://www.paypalobjects.com/webstatic/en_US/i/buttons/PP_logo_h_100x26.png" alt="PayPal" style="height:18px;vertical-align:middle;margin-right:6px;">Subscribe $50/yr
+                    </a>
                 </div>
             </div>
             <div class="impact-section">
@@ -1199,22 +1205,6 @@ def _support_html():
             <p>© 2026 The Spruce Grove Gazette | Serving Spruce Grove & Parkland County</p>
         </div>
         <script>
-            paypal.Buttons({
-                style: { shape: 'rect', color: 'gold', layout: 'vertical', label: 'subscribe', height: 40 },
-                createSubscription: function(data, actions) {
-                    return actions.subscription.create({ plan_id: 'P-8WS19802N5406432ENHWAJVY', application_context: { shipping_preference: 'NO_SHIPPING' } });
-                },
-                onApprove: function(data, actions) { alert('Thank you! You are now a Monthly Supporter.'); window.location.href = '/support-thank-you'; },
-                onError: function(err) { console.error(err); alert('Payment failed. Please try again.'); }
-            }).render('#paypal-monthly');
-            paypal.Buttons({
-                style: { shape: 'rect', color: 'gold', layout: 'vertical', label: 'subscribe', height: 40 },
-                createSubscription: function(data, actions) {
-                    return actions.subscription.create({ plan_id: 'P-9BL3287175752125FNHWAKYY', application_context: { shipping_preference: 'NO_SHIPPING' } });
-                },
-                onApprove: function(data, actions) { alert('Thank you! You are now a Yearly Supporter.'); window.location.href = '/support-thank-you'; },
-                onError: function(err) { console.error(err); alert('Payment failed. Please try again.'); }
-            }).render('#paypal-yearly');
             const customInput = document.getElementById('customAmount');
             const displaySpan = document.getElementById('customAmountDisplay');
             customInput.addEventListener('input', function() { displaySpan.innerText = customInput.value; renderCustomPaypalButton(); });
