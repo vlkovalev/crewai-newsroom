@@ -706,7 +706,7 @@ def article_page(article_id):
             <div><span class="article-category">{article['category']}</span></div>
             <h1 class="article-title">{article['title']}</h1>
             <div class="article-meta">
-                <i class="fas fa-calendar-alt"></i> {article['date'][:10] if article['date'] else "Recent"} | 
+                <i class="fas fa-calendar-alt"></i> {str(article['date'])[:10] if article['date'] else "Recent"} |
                 <i class="fas fa-user"></i> {article['author']} | 
                 <i class="fas fa-newspaper"></i> {article['source']}
             </div>
