@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
 """
-Standalone cron script — generates 3 Spruce Grove articles via OpenAI API
-and inserts them into gazette.db. Run by Render Cron Job daily.
+Render Cron Job — generates 3 Spruce Grove articles via OpenAI and publishes
+them to the web service via HTTP (POST /api/publish-article).
 
-Usage: python news_crew_enhanced.py
-Requires: OPENAI_API_KEY env var
+Required env vars:
+  OPENAI_API_KEY    — OpenAI API key
+  GAZETTE_BASE_URL  — base URL of the web service, e.g. https://your-app.onrender.com
+  GAZETTE_API_KEY   — shared secret matching X-Api-Key on the web service
 """
 
 import os
 import sys
 import json
-import sqlite3
 import requests
 from datetime import datetime
 from pathlib import Path
 
-DB_PATH = Path(__file__).parent / 'gazette.db'
 OPENAI_URL = 'https://api.openai.com/v1/chat/completions'
 
 TOPIC_ROTATION = [
@@ -45,23 +45,34 @@ def save_topic_index(n):
 
 
 def generate_daily_articles():
-    api_key = os.environ.get('OPENAI_API_KEY', '')
-    if not api_key:
+    openai_key = os.environ.get('OPENAI_API_KEY', '')
+    gazette_url = os.environ.get('GAZETTE_BASE_URL', '').rstrip('/')
+    gazette_api_key = os.environ.get('GAZETTE_API_KEY', '')
+
+    if not openai_key:
         print('[ERROR] OPENAI_API_KEY not set')
         return False
+    if not gazette_url:
+        print('[ERROR] GAZETTE_BASE_URL not set')
+        return False
+    if not gazette_api_key:
+        print('[ERROR] GAZETTE_API_KEY not set')
+        return False
 
+    publish_url = f'{gazette_url}/api/publish-article'
     today = datetime.utcnow().strftime('%B %d, %Y')
-    now = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
-    headers = {
-        'Authorization': f'Bearer {api_key}',
+    openai_headers = {
+        'Authorization': f'Bearer {openai_key}',
+        'Content-Type': 'application/json',
+    }
+    publish_headers = {
+        'X-Api-Key': gazette_api_key,
         'Content-Type': 'application/json',
     }
 
     topic_index = load_topic_index()
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-
     generated = 0
+
     for _ in range(3):
         cat, topic_desc = TOPIC_ROTATION[topic_index % len(TOPIC_ROTATION)]
         topic_index += 1
@@ -80,7 +91,7 @@ def generate_daily_articles():
         try:
             resp = requests.post(
                 OPENAI_URL,
-                headers=headers,
+                headers=openai_headers,
                 json={
                     'model': 'gpt-4o-mini',
                     'messages': [{'role': 'user', 'content': prompt}],
@@ -107,26 +118,38 @@ def generate_daily_articles():
                 print('[WARN] Empty title or content — skipping')
                 continue
 
-            cursor.execute(
-                '''INSERT INTO news_articles
-                   (title, content, summary, source, author, date, category, featured, active, views)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, 0, 1, 0)''',
-                (title, content, summary, 'Gazette AI', author, now, cat)
+            pub_resp = requests.post(
+                publish_url,
+                headers=publish_headers,
+                json={
+                    'title': title,
+                    'content': content,
+                    'summary': summary,
+                    'category': cat,
+                    'source': 'Gazette AI',
+                    'author': author,
+                },
+                timeout=15
             )
-            conn.commit()
-            generated += 1
-            print(f'[OK] {cat}: {title}')
+
+            if pub_resp.status_code in (200, 201):
+                result = pub_resp.json()
+                status = result.get('status', 'published')
+                print(f'[OK] {cat}: {title} ({status})')
+                if status != 'duplicate':
+                    generated += 1
+            else:
+                print(f'[ERROR] Publish failed {pub_resp.status_code}: {pub_resp.text[:200]}')
 
         except json.JSONDecodeError as e:
             print(f'[ERROR] JSON parse error: {e}')
         except requests.exceptions.Timeout:
-            print('[ERROR] OpenAI API timed out')
+            print('[ERROR] Request timed out')
         except requests.exceptions.RequestException as e:
             print(f'[ERROR] Request error: {e}')
         except Exception as e:
             print(f'[ERROR] Unexpected: {e}')
 
-    conn.close()
     save_topic_index(topic_index)
     print(f'[DONE] {generated}/3 articles saved')
     return generated > 0

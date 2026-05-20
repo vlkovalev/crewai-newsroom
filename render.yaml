@@ -35,9 +35,9 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0
-      - key: SCHEDULER_ENABLED
-        value: "0"
+      - key: GAZETTE_BASE_URL
+        value: https://spruce-grove-gazette.onrender.com
       - key: GAZETTE_API_KEY
         sync: false
-      - key: GEMINI_API_KEY
+      - key: OPENAI_API_KEY
         sync: false
