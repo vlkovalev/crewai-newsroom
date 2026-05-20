@@ -118,6 +118,7 @@ def generate_daily_articles():
                 print('[WARN] Empty title or content — skipping')
                 continue
 
+            expires = (datetime.utcnow().date() + __import__('datetime').timedelta(days=7)).isoformat()
             pub_resp = requests.post(
                 publish_url,
                 headers=publish_headers,
@@ -128,6 +129,10 @@ def generate_daily_articles():
                     'category': cat,
                     'source': 'Gazette AI',
                     'author': author,
+                    'score': 55,
+                    'story_type': 'standard',
+                    'source_label': 'AI Draft',
+                    'expires_from_front': expires,
                 },
                 timeout=15
             )

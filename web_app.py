@@ -91,10 +91,76 @@ def init_database():
         "ALTER TABLE events ADD COLUMN IF NOT EXISTS expiry_date DATE",
         "ALTER TABLE classifieds ADD COLUMN IF NOT EXISTS expiry_date DATE",
         "ALTER TABLE classifieds ADD COLUMN IF NOT EXISTS renewed_count INTEGER DEFAULT 0",
+        # Phase 1 editorial columns
+        "ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS urgent BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS pinned BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS score INTEGER DEFAULT 50",
+        "ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS story_type TEXT DEFAULT 'standard'",
+        "ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS expires_from_front DATE",
+        "ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS source_label TEXT DEFAULT 'Staff'",
+        "ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS correction TEXT",
+        "ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS last_updated TIMESTAMP",
+        "ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS search_vector tsvector",
     ]:
         cursor.execute(sql)
 
     cursor.execute("UPDATE classifieds SET expiry_date = CURRENT_DATE + INTERVAL '30 days' WHERE expiry_date IS NULL")
+
+    # Set default expires_from_front for existing articles that don't have it
+    cursor.execute("""
+        UPDATE news_articles
+        SET expires_from_front = date + INTERVAL '7 days'
+        WHERE expires_from_front IS NULL AND date IS NOT NULL
+    """)
+
+    # Populate FTS vector for existing rows
+    cursor.execute("""
+        UPDATE news_articles
+        SET search_vector = to_tsvector('english',
+            coalesce(title,'') || ' ' || coalesce(summary,'') || ' ' || coalesce(content,''))
+        WHERE search_vector IS NULL
+    """)
+
+    # GIN index for fast FTS queries (safe to re-run)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_articles_fts ON news_articles USING GIN(search_vector)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_articles_score ON news_articles(score DESC, date DESC)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_articles_urgent ON news_articles(urgent, date DESC)")
+
+    # Source registry table
+    cursor.execute('''CREATE TABLE IF NOT EXISTS source_registry (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL,
+        org_type TEXT DEFAULT 'media',
+        url TEXT,
+        region TEXT DEFAULT 'local',
+        topics TEXT[],
+        reliability INTEGER DEFAULT 3,
+        ingestion_type TEXT DEFAULT 'manual',
+        rss_url TEXT,
+        last_checked TIMESTAMP,
+        active BOOLEAN DEFAULT TRUE,
+        notes TEXT
+    )''')
+
+    # Seed default sources if table is empty
+    cursor.execute("SELECT COUNT(*) FROM source_registry")
+    if cursor.fetchone()['count'] == 0:
+        sources = [
+            ('Gazette AI',          'staff',       'https://sprucegrovegazette.com', 'local',      5, 'AI-generated, editor-reviewed'),
+            ('City of Spruce Grove','government',  'https://sprucegrove.ca',         'local',      5, 'Official city news and press releases'),
+            ('Parkland County',     'government',  'https://parklandcounty.com',     'local',      5, 'Regional government'),
+            ('RCMP K-Division',     'government',  'https://rcmp-grc.gc.ca',         'provincial', 5, 'Police press releases'),
+            ('CBC Edmonton',        'media',       'https://cbc.ca/edmonton',        'provincial', 5, 'National public broadcaster'),
+            ('CTV Edmonton',        'media',       'https://edmonton.ctvnews.ca',    'provincial', 4, 'National private broadcaster'),
+            ('Edmonton Journal',    'media',       'https://edmontonjournal.com',    'provincial', 4, 'Daily newspaper'),
+            ('Spruce Grove Examiner','media',      'https://sprucegroveexaminer.com','local',      4, 'Local paper'),
+        ]
+        for s in sources:
+            cursor.execute(
+                """INSERT INTO source_registry (name, org_type, url, region, reliability, notes)
+                   VALUES (%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING""",
+                s
+            )
 
     conn.commit()
     conn.close()
@@ -172,7 +238,50 @@ def get_weather():
 def get_news_articles(limit=10):
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, title, summary, source, date, category, views FROM news_articles WHERE active = TRUE ORDER BY date DESC LIMIT %s", (limit,))
+    cursor.execute(
+        """SELECT id, title, summary, source, date, category, views,
+                  coalesce(score,50) - EXTRACT(EPOCH FROM (NOW()-date))/7200 AS eff_score,
+                  urgent, pinned, story_type, source_label, correction
+           FROM news_articles
+           WHERE active = TRUE AND (expires_from_front IS NULL OR expires_from_front >= CURRENT_DATE)
+           ORDER BY pinned DESC, eff_score DESC, date DESC
+           LIMIT %s""",
+        (limit,)
+    )
+    articles = cursor.fetchall()
+    conn.close()
+    return [dict(a) for a in articles]
+
+
+def get_urgent_articles():
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute(
+        """SELECT id, title, summary, source, date, category, source_label
+           FROM news_articles
+           WHERE active = TRUE AND urgent = TRUE
+             AND date >= NOW() - INTERVAL '6 hours'
+           ORDER BY date DESC LIMIT 3"""
+    )
+    articles = cursor.fetchall()
+    conn.close()
+    return [dict(a) for a in articles]
+
+
+def get_top_stories():
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute(
+        """SELECT id, title, summary, source, date, category, views,
+                  coalesce(score,50) AS score, source_label, story_type
+           FROM news_articles
+           WHERE active = TRUE AND urgent = FALSE
+             AND coalesce(score,50) >= 70
+             AND date >= NOW() - INTERVAL '48 hours'
+             AND (expires_from_front IS NULL OR expires_from_front >= CURRENT_DATE)
+           ORDER BY pinned DESC, score DESC, date DESC
+           LIMIT 5"""
+    )
     articles = cursor.fetchall()
     conn.close()
     return [dict(a) for a in articles]
@@ -284,18 +393,20 @@ def home():
         events = get_events(6)
         businesses = get_businesses(3)
         news_articles = get_news_articles(6)
-        
+        urgent_articles = get_urgent_articles()
+        top_stories = get_top_stories()
+
         conn = get_db()
         cursor = conn.cursor()
         cursor.execute("SELECT title, description, price, contact, date, category FROM classifieds WHERE active = TRUE AND expiry_date >= CURRENT_DATE ORDER BY date DESC LIMIT 3")
         classifieds_list = cursor.fetchall()
         conn.close()
-        
+
         # Build forecast HTML
         forecast_html = ""
         for f in forecast:
             forecast_html += f'<div class="forecast-card"><div class="forecast-day">{f["day"]}</div><div class="forecast-icon">{f["icon"]}</div><div class="forecast-temp">{f["high"]}° / {f["low"]}°</div></div>'
-        
+
         # Build events HTML
         events_html = ""
         if events:
@@ -303,13 +414,41 @@ def home():
                 events_html += f'<li class="event-item"><strong>{e["title"]}</strong><br><i class="fas fa-calendar-alt"></i> {e["date"]} at {e["time"]}<br><i class="fas fa-map-marker-alt"></i> {e["location"]}</li>'
         else:
             events_html = '<li>No upcoming events. <a href="/events/create">Create one!</a></li>'
-        
-        # Build news HTML
+
+        # Build urgent banner HTML
+        urgent_html = ""
+        for a in urgent_articles:
+            mins_ago = ""
+            if a.get("date"):
+                delta = datetime.utcnow() - a["date"].replace(tzinfo=None)
+                mins = int(delta.total_seconds() / 60)
+                mins_ago = f'{mins}m ago' if mins < 60 else f'{mins//60}h ago'
+            urgent_html += f'<div class="urgent-item"><span class="urgent-dot">●</span><a href="/article/{a["id"]}">{a["title"]}</a><span class="urgent-time">{mins_ago}</span></div>'
+
+        # Build top stories HTML
+        top_ids = {a["id"] for a in top_stories}
+        top_html = ""
+        for a in top_stories:
+            label = a.get("source_label") or "Staff"
+            label_class = {"Official":"badge-official","Media":"badge-media","AI Draft":"badge-ai"}.get(label,"badge-staff")
+            top_html += f'''<div class="top-story-card">
+                <div class="top-story-meta"><span class="source-badge {label_class}">{label}</span><span class="top-cat">{a["category"]}</span></div>
+                <h3><a href="/article/{a["id"]}">{a["title"]}</a></h3>
+                <p>{(a["summary"] or "")[:130]}...</p>
+                <div class="top-story-footer"><i class="fas fa-calendar-alt"></i> {str(a["date"])[:10] if a["date"] else "Recent"}</div>
+            </div>'''
+
+        # Build news HTML (exclude top story IDs to avoid duplication)
         news_html = ""
-        if news_articles:
-            for a in news_articles[:3]:
-                news_html += f'<div class="news-item"><div class="news-category">{a["category"]}</div><h3><a href="/article/{a["id"]}">{a["title"]}</a></h3><div class="news-meta"><i class="fas fa-calendar-alt"></i> {str(a["date"])[:10] if a["date"] else "Recent"}</div><p>{a["summary"][:150]}...</p><a href="/article/{a["id"]}" class="read-more">Read Full Story →</a></div>'
-        else:
+        shown = 0
+        for a in news_articles:
+            if a["id"] in top_ids:
+                continue
+            if shown >= 3:
+                break
+            news_html += f'<div class="news-item"><div class="news-category">{a["category"]}</div><h3><a href="/article/{a["id"]}">{a["title"]}</a></h3><div class="news-meta"><i class="fas fa-calendar-alt"></i> {str(a["date"])[:10] if a["date"] else "Recent"}</div><p>{(a["summary"] or "")[:150]}...</p><a href="/article/{a["id"]}" class="read-more">Read Full Story →</a></div>'
+            shown += 1
+        if not news_html:
             news_html = '<p>No news articles yet. Check back soon!</p>'
         
         # Build classifieds HTML
@@ -399,7 +538,33 @@ def home():
                 .dark-mode-toggle {{ position: fixed; bottom: 20px; right: 20px; background: var(--primary); color: white; border: none; border-radius: 50px; padding: 12px 18px; cursor: pointer; z-index: 1000; }}
                 body.dark-mode {{ background: #1a1a2e; color: #eee; }}
                 body.dark-mode .header, body.dark-mode .featured-article, body.dark-mode .news-item, body.dark-mode .business-card, body.dark-mode .stat-card {{ background: #16213e; color: #eee; }}
-                @media (max-width: 768px) {{ .stats, .news-grid, .two-column, .business-grid {{ grid-template-columns: 1fr; }} .footer-content {{ grid-template-columns: repeat(2, 1fr); }} }}
+                @media (max-width: 768px) {{ .stats, .news-grid, .two-column, .business-grid {{ grid-template-columns: 1fr; }} .footer-content {{ grid-template-columns: repeat(2, 1fr); }} .top-stories-grid {{ grid-template-columns: 1fr; }} }}
+                /* ── Breaking / Urgent banner ── */
+                .urgent-banner {{ background:#c0392b;color:white;padding:12px 20px;display:flex;flex-direction:column;gap:6px; }}
+                .urgent-banner-title {{ font-size:11px;font-weight:900;letter-spacing:2px;text-transform:uppercase;margin-bottom:4px; }}
+                .urgent-item {{ display:flex;align-items:center;gap:10px;font-size:14px; }}
+                .urgent-item a {{ color:white;font-weight:bold;text-decoration:none; }}
+                .urgent-item a:hover {{ text-decoration:underline; }}
+                .urgent-dot {{ color:#ff6b6b;font-size:18px;animation:blink 1s step-start infinite; }}
+                .urgent-time {{ margin-left:auto;font-size:11px;opacity:0.8;white-space:nowrap; }}
+                @keyframes blink {{ 50% {{ opacity:0; }} }}
+                /* ── Top Stories ── */
+                .top-stories-grid {{ display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-bottom:30px; }}
+                .top-story-card {{ background:white;border-radius:10px;padding:20px;box-shadow:0 3px 10px rgba(0,0,0,0.12);border-top:3px solid var(--accent);transition:transform .2s; }}
+                .top-story-card:hover {{ transform:translateY(-3px); }}
+                .top-story-card h3 {{ font-size:16px;margin:8px 0; }}
+                .top-story-card h3 a {{ color:var(--primary);text-decoration:none; }}
+                .top-story-card h3 a:hover {{ text-decoration:underline; }}
+                .top-story-card p {{ color:#555;font-size:13px;margin:0 0 10px; }}
+                .top-story-meta {{ display:flex;gap:6px;align-items:center;margin-bottom:6px; }}
+                .top-cat {{ font-size:10px;background:var(--primary-light);color:white;padding:2px 8px;border-radius:10px; }}
+                .top-story-footer {{ font-size:11px;color:#888; }}
+                /* ── Source badges ── */
+                .source-badge {{ font-size:9px;font-weight:bold;padding:2px 7px;border-radius:10px;text-transform:uppercase; }}
+                .badge-staff {{ background:#2ecc71;color:white; }}
+                .badge-official {{ background:#3498db;color:white; }}
+                .badge-media {{ background:#95a5a6;color:white; }}
+                .badge-ai {{ background:#9b59b6;color:white; }}
             </style>
         </head>
         <body>
@@ -416,6 +581,10 @@ def home():
                 <a href="/advertise"><i class="fas fa-bullhorn"></i> ADVERTISE</a>
                 <a href="/support" style="background:#D4A017;color:#1a3d1a;padding:5px 12px;border-radius:20px;"><i class="fas fa-star"></i> SUPPORT</a>
             </div>
+            {f'''<div class="urgent-banner">
+                <div class="urgent-banner-title">🚨 Breaking News</div>
+                {urgent_html}
+            </div>''' if urgent_html else ''}
             <div class="hero">
                 <h2>Your Hometown, Online.</h2>
                 <p>Serving Spruce Grove, Stony Plain & Parkland County</p>
@@ -459,7 +628,8 @@ def home():
                     <a href="/subscribe" class="btn"><i class="fas fa-envelope"></i> Subscribe to Newsletter →</a>
                 </div>
                 
-                <h2 class="section-title"><i class="fas fa-building"></i> Local News</h2>
+                {f'<h2 class="section-title"><i class="fas fa-star"></i> Top Stories</h2><div class="top-stories-grid">{top_html}</div>' if top_html else ''}
+                <h2 class="section-title"><i class="fas fa-building"></i> Latest News</h2>
                 <div class="news-grid">{news_html}</div>
                 
                 <div class="two-column">
@@ -1417,9 +1587,17 @@ def search():
         conn = get_db()
         cursor = conn.cursor()
         try:
+            # Full-text search via tsvector index; fallback to LIKE if vector not populated
             cursor.execute(
-                "SELECT id, title, content, date FROM news_articles WHERE active=TRUE AND (title LIKE %s OR content LIKE %s) ORDER BY date DESC LIMIT 20",
-                (f'%{q}%', f'%{q}%')
+                """SELECT id, title, content, date, category, source_label,
+                          ts_rank(search_vector, query) AS rank
+                   FROM news_articles,
+                        plainto_tsquery('english', %s) query
+                   WHERE active=TRUE
+                     AND (search_vector @@ query
+                          OR title ILIKE %s)
+                   ORDER BY rank DESC, date DESC LIMIT 20""",
+                (q, f'%{q}%')
             )
             for a in cursor.fetchall():
                 results.append({'type': 'News', 'id': a['id'], 'title': a['title'],
@@ -1428,7 +1606,7 @@ def search():
             print(f"Search news error: {e}")
         try:
             cursor.execute(
-                "SELECT id, title, description, category FROM classifieds WHERE active=TRUE AND (title LIKE %s OR description LIKE %s) ORDER BY date DESC LIMIT 10",
+                "SELECT id, title, description, category FROM classifieds WHERE active=TRUE AND (title ILIKE %s OR description ILIKE %s) ORDER BY date DESC LIMIT 10",
                 (f'%{q}%', f'%{q}%')
             )
             for a in cursor.fetchall():
@@ -1752,19 +1930,37 @@ def api_publish_article():
     if not data:
         return jsonify({'error': 'Invalid JSON body'}), 400
 
-    title    = (data.get('title') or '').strip()[:200]
-    content  = (data.get('content') or '').strip()
-    summary  = (data.get('summary') or '').strip()[:400]
-    category = (data.get('category') or 'News').strip()
-    source   = (data.get('source') or '').strip()[:200]
-    author   = (data.get('author') or 'Gazette Newsroom').strip()[:100]
-    url      = (data.get('source_url') or '').strip()[:500]
+    title        = (data.get('title') or '').strip()[:200]
+    content      = (data.get('content') or '').strip()
+    summary      = (data.get('summary') or '').strip()[:400]
+    category     = (data.get('category') or 'News').strip()
+    source       = (data.get('source') or '').strip()[:200]
+    author       = (data.get('author') or 'Gazette Newsroom').strip()[:100]
+    url          = (data.get('source_url') or '').strip()[:500]
+    score        = int(data.get('score') or 50)
+    urgent       = bool(data.get('urgent', False))
+    story_type   = (data.get('story_type') or 'standard').strip()
+    source_label = (data.get('source_label') or 'Staff').strip()
+    expires_raw  = data.get('expires_from_front')
 
     if not title or not content or not source:
         return jsonify({'error': 'title, content, and source are required'}), 400
 
     if category not in VALID_CATEGORIES:
         category = 'News'
+
+    # Set expires_from_front: caller can pass ISO date string, else default by story_type
+    if expires_raw:
+        try:
+            from datetime import date as _date
+            expires_from_front = str(expires_raw)[:10]
+        except Exception:
+            expires_from_front = None
+    else:
+        days_map = {'breaking': 1, 'developing': 2, 'standard': 7,
+                    'community': 7, 'analysis': 14, 'opinion': 7, 'evergreen': None}
+        days = days_map.get(story_type, 7)
+        expires_from_front = (datetime.utcnow().date() + __import__('datetime').timedelta(days=days)).isoformat() if days else None
 
     now = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
     conn = get_db()
@@ -1781,15 +1977,142 @@ def api_publish_article():
 
     cursor.execute(
         '''INSERT INTO news_articles
-           (title, content, summary, source, author, date, category, featured, active, url, views)
-           VALUES (%s,%s,%s,%s,%s,%s,%s,FALSE,TRUE,%s,0) RETURNING id''',
-        (title, content, summary, source, author, now, category, url)
+           (title, content, summary, source, author, date, category, featured, active, url, views,
+            score, urgent, story_type, source_label, expires_from_front,
+            search_vector)
+           VALUES (%s,%s,%s,%s,%s,%s,%s,FALSE,TRUE,%s,0,
+                   %s,%s,%s,%s,%s,
+                   to_tsvector('english', %s || ' ' || %s || ' ' || %s))
+           RETURNING id''',
+        (title, content, summary, source, author, now, category, url,
+         score, urgent, story_type, source_label, expires_from_front,
+         title, summary, content)
     )
     article_id = cursor.fetchone()['id']
     conn.commit()
     conn.close()
 
-    return jsonify({'id': article_id, 'title': title, 'category': category, 'status': 'published'}), 201
+    return jsonify({'id': article_id, 'title': title, 'category': category,
+                    'score': score, 'urgent': urgent, 'status': 'published'}), 201
+
+
+# ─────────────────────────────────────────
+# Archive routes
+# ─────────────────────────────────────────
+
+@app.route('/archive')
+def archive_index():
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT DATE(date) AS day, COUNT(*) AS cnt
+        FROM news_articles WHERE active = TRUE
+        GROUP BY DATE(date) ORDER BY day DESC LIMIT 60
+    """)
+    days = cursor.fetchall()
+    conn.close()
+    rows_html = ''.join(
+        f'<tr><td><a href="/archive/{str(d["day"])}">{str(d["day"])}</a></td><td>{d["cnt"]}</td></tr>'
+        for d in days
+    )
+    return f'''<!DOCTYPE html><html><head><title>Archive – {NEWSPAPER_NAME}</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>body{{font-family:Georgia;background:#f9f9f5;margin:0}}
+    .header{{background:#1a3d1a;color:white;padding:30px;text-align:center}}
+    .container{{max-width:700px;margin:40px auto;padding:0 20px}}
+    table{{width:100%;border-collapse:collapse;background:white;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.1)}}
+    th{{background:#1a3d1a;color:white;padding:12px;text-align:left}}
+    td{{padding:10px 12px;border-bottom:1px solid #eee}}
+    td a{{color:#1a3d1a;text-decoration:none;font-weight:bold}}td a:hover{{text-decoration:underline}}
+    .nav{{background:#2C5F2D;padding:10px;text-align:center}}.nav a{{color:white;margin:0 12px;text-decoration:none}}
+    .footer{{background:#0d260d;color:white;text-align:center;padding:20px;margin-top:40px}}
+    </style></head><body>
+    <div class="header"><h1><i class="fas fa-archive"></i> News Archive</h1></div>
+    <div class="nav"><a href="/">Home</a><a href="/news">News</a><a href="/search">Search</a></div>
+    <div class="container"><h2>Daily Archives</h2>
+    <table><tr><th>Date</th><th>Articles</th></tr>{rows_html}</table></div>
+    <div class="footer">© {datetime.now().year} {NEWSPAPER_NAME}</div></body></html>'''
+
+
+@app.route('/archive/<date_str>')
+def archive_day(date_str):
+    try:
+        from datetime import datetime as _dt
+        _dt.strptime(date_str, '%Y-%m-%d')
+    except ValueError:
+        return redirect('/archive')
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute(
+        """SELECT id, title, summary, source, date, category, score, source_label
+           FROM news_articles WHERE active = TRUE AND DATE(date) = %s
+           ORDER BY score DESC, date DESC""",
+        (date_str,)
+    )
+    articles = cursor.fetchall()
+    conn.close()
+    rows_html = ''.join(
+        f'''<div style="background:white;border-radius:8px;padding:20px;margin-bottom:16px;box-shadow:0 2px 6px rgba(0,0,0,.08)">
+            <span style="font-size:10px;background:#1a3d1a;color:white;padding:2px 8px;border-radius:10px">{a["category"]}</span>
+            <span style="font-size:10px;background:#9b59b6;color:white;padding:2px 8px;border-radius:10px;margin-left:4px">{a.get("source_label") or "Staff"}</span>
+            <h3 style="margin:8px 0"><a href="/article/{a["id"]}" style="color:#1a3d1a;text-decoration:none">{a["title"]}</a></h3>
+            <p style="color:#555;font-size:13px;margin:0">{(a["summary"] or "")[:150]}...</p>
+            <div style="color:#999;font-size:11px;margin-top:8px">{str(a["date"])[:16]} · {a["source"]} · Score: {a["score"] or 50}</div>
+        </div>'''
+        for a in articles
+    ) or '<p>No articles archived for this date.</p>'
+    return f'''<!DOCTYPE html><html><head><title>{date_str} Archive – {NEWSPAPER_NAME}</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>body{{font-family:Georgia;background:#f9f9f5;margin:0}}
+    .header{{background:#1a3d1a;color:white;padding:30px;text-align:center}}
+    .container{{max-width:800px;margin:40px auto;padding:0 20px}}
+    .nav{{background:#2C5F2D;padding:10px;text-align:center}}.nav a{{color:white;margin:0 12px;text-decoration:none}}
+    .footer{{background:#0d260d;color:white;text-align:center;padding:20px;margin-top:40px}}
+    </style></head><body>
+    <div class="header"><h1><i class="fas fa-calendar-day"></i> {date_str}</h1><p>{len(articles)} articles archived</p></div>
+    <div class="nav"><a href="/">Home</a><a href="/archive">Archive Index</a><a href="/news">News</a></div>
+    <div class="container">{rows_html}</div>
+    <div class="footer">© {datetime.now().year} {NEWSPAPER_NAME}</div></body></html>'''
+
+
+@app.route('/sources')
+def sources_page():
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT name, org_type, url, region, reliability, ingestion_type, notes FROM source_registry WHERE active = TRUE ORDER BY reliability DESC, name")
+    sources = cursor.fetchall()
+    conn.close()
+    label_map = {'staff':'🟢 Staff','government':'🏛️ Official','media':'📰 Media',
+                 'NGO':'🤝 NGO','independent':'🎤 Independent','user_submitted':'📨 Submitted'}
+    rows = ''.join(
+        f'''<tr>
+            <td><strong>{s["name"]}</strong></td>
+            <td>{label_map.get(s["org_type"], s["org_type"])}</td>
+            <td>{s["region"] or "—"}</td>
+            <td>{"⭐" * (s["reliability"] or 0)}</td>
+            <td>{s["ingestion_type"] or "manual"}</td>
+            <td>{f'<a href="{s["url"]}" target="_blank">Link</a>' if s["url"] else "—"}</td>
+        </tr>'''
+        for s in sources
+    )
+    return f'''<!DOCTYPE html><html><head><title>Sources – {NEWSPAPER_NAME}</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>body{{font-family:Georgia;background:#f9f9f5;margin:0}}
+    .header{{background:#1a3d1a;color:white;padding:30px;text-align:center}}
+    .container{{max-width:1000px;margin:40px auto;padding:0 20px}}
+    table{{width:100%;border-collapse:collapse;background:white;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.1)}}
+    th{{background:#1a3d1a;color:white;padding:12px;text-align:left;font-size:13px}}
+    td{{padding:10px 12px;border-bottom:1px solid #eee;font-size:13px}}
+    td a{{color:#1a3d1a}}
+    .nav{{background:#2C5F2D;padding:10px;text-align:center}}.nav a{{color:white;margin:0 12px;text-decoration:none}}
+    .footer{{background:#0d260d;color:white;text-align:center;padding:20px;margin-top:40px}}
+    </style></head><body>
+    <div class="header"><h1><i class="fas fa-list-alt"></i> Source Directory</h1><p>All news sources used by {NEWSPAPER_NAME}</p></div>
+    <div class="nav"><a href="/">Home</a><a href="/news">News</a><a href="/archive">Archive</a></div>
+    <div class="container">
+    <table><tr><th>Source</th><th>Type</th><th>Region</th><th>Reliability</th><th>Method</th><th>URL</th></tr>
+    {rows}</table></div>
+    <div class="footer">© {datetime.now().year} {NEWSPAPER_NAME}</div></body></html>'''
 
 
 # ─────────────────────────────────────────
