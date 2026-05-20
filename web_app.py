@@ -308,7 +308,7 @@ def home():
         news_html = ""
         if news_articles:
             for a in news_articles[:3]:
-                news_html += f'<div class="news-item"><div class="news-category">{a["category"]}</div><h3><a href="/article/{a["id"]}">{a["title"]}</a></h3><div class="news-meta"><i class="fas fa-calendar-alt"></i> {a["date"][:10] if a["date"] else "Recent"}</div><p>{a["summary"][:150]}...</p><a href="/article/{a["id"]}" class="read-more">Read Full Story →</a></div>'
+                news_html += f'<div class="news-item"><div class="news-category">{a["category"]}</div><h3><a href="/article/{a["id"]}">{a["title"]}</a></h3><div class="news-meta"><i class="fas fa-calendar-alt"></i> {str(a["date"])[:10] if a["date"] else "Recent"}</div><p>{a["summary"][:150]}...</p><a href="/article/{a["id"]}" class="read-more">Read Full Story →</a></div>'
         else:
             news_html = '<p>No news articles yet. Check back soon!</p>'
         
@@ -573,7 +573,7 @@ def news_index():
             <div class="news-article">
                 <a href="/category/{a['category']}" class="article-category">{a["category"]}</a>
                 <h2><a href="/article/{a["id"]}">{a["title"]}</a></h2>
-                <div class="article-meta"><i class="fas fa-calendar-alt"></i> {a["date"][:10] if a["date"] else "Recent"} | <i class="fas fa-newspaper"></i> {a["source"]} | <i class="fas fa-eye"></i> {a["views"]} views</div>
+                <div class="article-meta"><i class="fas fa-calendar-alt"></i> {str(a["date"])[:10] if a["date"] else "Recent"} | <i class="fas fa-newspaper"></i> {a["source"]} | <i class="fas fa-eye"></i> {a["views"]} views</div>
                 <p>{a["summary"]}...</p>
                 <a href="/article/{a["id"]}" class="read-more">Read Full Story →</a>
             </div>
@@ -628,7 +628,7 @@ def category_page(category):
     if rows:
         for row in rows:
             aid, title, summary, source, date, cat, views = row['id'], row['title'], row['summary'], row['source'], row['date'], row['category'], row['views']
-            date_str = (date or "")[:10] or "Recent"
+            date_str = str(date or "")[:10] or "Recent"
             articles_html += f'''
             <div class="news-article">
                 <a href="/category/{cat}" class="article-category">{cat}</a>
