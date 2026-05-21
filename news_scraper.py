@@ -20,12 +20,39 @@ from xml.etree import ElementTree as ET
 OPENAI_URL = 'https://api.openai.com/v1/chat/completions'
 
 RSS_SOURCES = [
+    # ── Google News targeted searches (always have local content) ──
+    {
+        'name': 'Google News – Spruce Grove',
+        'url': 'https://news.google.com/rss/search?q=Spruce+Grove+Alberta&hl=en-CA&gl=CA&ceid=CA:en',
+        'reliability': 4,
+        'label': 'Media',
+        'category': None,
+        'always_local': True,   # skip keyword filter — already targeted
+    },
+    {
+        'name': 'Google News – Parkland County',
+        'url': 'https://news.google.com/rss/search?q=Parkland+County+Alberta&hl=en-CA&gl=CA&ceid=CA:en',
+        'reliability': 4,
+        'label': 'Media',
+        'category': None,
+        'always_local': True,
+    },
+    {
+        'name': 'Google News – Stony Plain',
+        'url': 'https://news.google.com/rss/search?q=Stony+Plain+Alberta&hl=en-CA&gl=CA&ceid=CA:en',
+        'reliability': 4,
+        'label': 'Media',
+        'category': None,
+        'always_local': True,
+    },
+    # ── Regional outlets (keyword-filtered) ──
     {
         'name': 'CBC Edmonton',
         'url': 'https://www.cbc.ca/cmlink/rss-canada-edmonton',
         'reliability': 5,
         'label': 'Media',
         'category': None,
+        'always_local': False,
     },
     {
         'name': 'Edmonton Journal',
@@ -33,6 +60,7 @@ RSS_SOURCES = [
         'reliability': 4,
         'label': 'Media',
         'category': None,
+        'always_local': False,
     },
     {
         'name': 'CTV Edmonton',
@@ -40,6 +68,7 @@ RSS_SOURCES = [
         'reliability': 4,
         'label': 'Media',
         'category': None,
+        'always_local': False,
     },
     {
         'name': 'Government of Alberta',
@@ -47,6 +76,7 @@ RSS_SOURCES = [
         'reliability': 5,
         'label': 'Official',
         'category': 'News',
+        'always_local': False,
     },
     {
         'name': 'Parkland County',
@@ -54,6 +84,7 @@ RSS_SOURCES = [
         'reliability': 5,
         'label': 'Official',
         'category': 'News',
+        'always_local': True,
     },
 ]
 
@@ -187,7 +218,9 @@ def run_scraper():
             title = item['title']
             desc  = item['desc']
 
-            if not title or not is_local(title, desc):
+            if not title:
+                continue
+            if not src.get('always_local') and not is_local(title, desc):
                 continue
 
             # Deduplicate: skip if same title published in last 48h
