@@ -268,6 +268,22 @@ def get_urgent_articles():
     return [dict(a) for a in articles]
 
 
+def get_regional_news(category, limit=4):
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute(
+        """SELECT id, title, summary, source, date, source_label
+           FROM news_articles
+           WHERE active = TRUE AND category = %s
+             AND (expires_from_front IS NULL OR expires_from_front >= CURRENT_DATE)
+           ORDER BY date DESC LIMIT %s""",
+        (category, limit)
+    )
+    articles = cursor.fetchall()
+    conn.close()
+    return [dict(a) for a in articles]
+
+
 def get_top_stories():
     conn = get_db()
     cursor = conn.cursor()
@@ -289,7 +305,12 @@ def get_top_stories():
 def get_article_by_id(article_id):
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, title, content, summary, source, author, date, category FROM news_articles WHERE id = %s AND active = TRUE", (article_id,))
+    cursor.execute(
+        """SELECT id, title, content, summary, source, author, date, category,
+                  url, source_label, correction, urgent
+           FROM news_articles WHERE id = %s AND active = TRUE""",
+        (article_id,)
+    )
     article = cursor.fetchone()
     if article:
         cursor.execute("UPDATE news_articles SET views = views + 1 WHERE id = %s", (article_id,))
@@ -421,6 +442,8 @@ def home():
         news_articles = get_news_articles(6)
         urgent_articles = get_urgent_articles()
         top_stories = get_top_stories()
+        edmonton_news = get_regional_news('Edmonton Area', 4)
+        alberta_news  = get_regional_news('Alberta', 4)
 
         conn = get_db()
         cursor = conn.cursor()
@@ -476,6 +499,26 @@ def home():
             shown += 1
         if not news_html:
             news_html = '<p>No news articles yet. Check back soon!</p>'
+
+        def _regional_cards(articles):
+            if not articles:
+                return '<p style="color:#888">Check back soon for regional updates.</p>'
+            html = ''
+            for a in articles:
+                label = a.get('source_label') or 'Media'
+                lc = {'Official':'#3498db','Media':'#7f8c8d','AI Draft':'#9b59b6'}.get(label,'#2ecc71')
+                html += (
+                    f'<div class="regional-card">'
+                    f'<span class="regional-label" style="background:{lc}">{label}</span>'
+                    f'<h4><a href="/article/{a["id"]}">{a["title"]}</a></h4>'
+                    f'<div class="regional-meta"><i class="fas fa-newspaper"></i> {a["source"]} &nbsp;'
+                    f'<i class="fas fa-calendar-alt"></i> {str(a["date"])[:10] if a["date"] else "Recent"}</div>'
+                    f'</div>'
+                )
+            return html
+
+        edmonton_html = _regional_cards(edmonton_news)
+        alberta_html  = _regional_cards(alberta_news)
 
         urgent_section = (
             '<div class="urgent-banner"><div class="urgent-banner-title">&#x1F6A8; Breaking News</div>'
@@ -574,7 +617,16 @@ def home():
                 .dark-mode-toggle {{ position: fixed; bottom: 20px; right: 20px; background: var(--primary); color: white; border: none; border-radius: 50px; padding: 12px 18px; cursor: pointer; z-index: 1000; }}
                 body.dark-mode {{ background: #1a1a2e; color: #eee; }}
                 body.dark-mode .header, body.dark-mode .featured-article, body.dark-mode .news-item, body.dark-mode .business-card, body.dark-mode .stat-card {{ background: #16213e; color: #eee; }}
-                @media (max-width: 768px) {{ .stats, .news-grid, .two-column, .business-grid {{ grid-template-columns: 1fr; }} .footer-content {{ grid-template-columns: repeat(2, 1fr); }} .top-stories-grid {{ grid-template-columns: 1fr; }} }}
+                @media (max-width: 768px) {{ .stats, .news-grid, .two-column, .business-grid {{ grid-template-columns: 1fr; }} .footer-content {{ grid-template-columns: repeat(2, 1fr); }} .top-stories-grid, .regional-grid {{ grid-template-columns: 1fr; }} }}
+                /* ── Regional news strips ── */
+                .regional-grid {{ display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-bottom:30px; }}
+                .regional-card {{ background:white;border-radius:8px;padding:16px;box-shadow:0 2px 6px rgba(0,0,0,.08);transition:transform .2s; }}
+                .regional-card:hover {{ transform:translateY(-2px); }}
+                .regional-card h4 {{ font-size:14px;margin:6px 0 8px;line-height:1.4; }}
+                .regional-card h4 a {{ color:var(--primary);text-decoration:none; }}
+                .regional-card h4 a:hover {{ text-decoration:underline; }}
+                .regional-label {{ font-size:9px;font-weight:bold;padding:2px 7px;border-radius:10px;text-transform:uppercase;color:white; }}
+                .regional-meta {{ font-size:11px;color:#999; }}
                 /* ── Breaking / Urgent banner ── */
                 .urgent-banner {{ background:#c0392b;color:white;padding:12px 20px;display:flex;flex-direction:column;gap:6px; }}
                 .urgent-banner-title {{ font-size:11px;font-weight:900;letter-spacing:2px;text-transform:uppercase;margin-bottom:4px; }}
@@ -696,6 +748,9 @@ def home():
                     </div>
                 </div>
                 
+                {('<h2 class="section-title"><i class="fas fa-city"></i> Edmonton Area</h2><div class="regional-grid">' + edmonton_html + '</div>') if edmonton_news else ''}
+                {('<h2 class="section-title"><i class="fas fa-map"></i> Alberta</h2><div class="regional-grid">' + alberta_html + '</div>') if alberta_news else ''}
+
                 <div class="newsletter">
                     <i class="fas fa-envelope" style="font-size:48px;margin-bottom:15px"></i>
                     <h3>✉️ Never Miss an Edition</h3>
@@ -879,47 +934,91 @@ def article_page(article_id):
     article = get_article_by_id(article_id)
     if not article:
         return redirect('/news')
-    
-    paragraphs = article['content'].split('\n\n')
-    formatted_content = ''.join([f'<p>{p.replace(chr(10), "<br>")}</p>' for p in paragraphs])
-    
-    return f'''
-    <!DOCTYPE html>
+
+    paragraphs = (article['content'] or '').split('\n\n')
+    formatted_content = ''.join([f'<p>{p.replace(chr(10), "<br>")}</p>' for p in paragraphs if p.strip()])
+
+    label = article.get('source_label') or 'Staff'
+    label_colors = {'Official': '#3498db', 'Media': '#7f8c8d', 'AI Draft': '#9b59b6', 'Staff': '#2ecc71'}
+    label_color = label_colors.get(label, '#2ecc71')
+
+    original_btn = ''
+    if article.get('url'):
+        original_btn = f'<a href="{article["url"]}" target="_blank" rel="noopener" class="btn-original"><i class="fas fa-external-link-alt"></i> Read Full Article at {article["source"]}</a>'
+
+    correction_banner = ''
+    if article.get('correction'):
+        correction_banner = f'<div class="correction-banner"><strong>Correction:</strong> {article["correction"]}</div>'
+
+    urgent_banner = '<div class="urgent-article-banner"><i class="fas fa-exclamation-triangle"></i> Breaking News</div>' if article.get('urgent') else ''
+
+    return f'''<!DOCTYPE html>
     <html>
-    <head><title>{article['title']} - {NEWSPAPER_NAME}</title><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <head><title>{article["title"]} – {NEWSPAPER_NAME}</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        body{{font-family:Georgia;background:#f9f9f5;margin:0}}
+        body{{font-family:Georgia,serif;background:#f9f9f5;margin:0}}
         .header{{background:#1a3d1a;color:white;padding:20px;text-align:center}}
         .nav{{background:#2C5F2D;padding:12px;text-align:center}}
-        .nav a{{color:white;margin:0 15px;text-decoration:none}}
-        .container{{max-width:800px;margin:40px auto;background:white;padding:40px;border-radius:10px;box-shadow:0 4px 15px rgba(0,0,0,0.1)}}
-        .article-category{{display:inline-block;background:#1a3d1a;color:white;padding:4px 12px;border-radius:15px;font-size:11px;margin-bottom:15px}}
-        .article-title{{font-size:32px;color:#1a3d1a;margin-bottom:15px}}
-        .article-meta{{color:#666;border-bottom:1px solid #ddd;padding-bottom:15px;margin-bottom:25px}}
-        .article-content{{line-height:1.8;font-size:18px}}
-        .article-content p{{margin-bottom:20px}}
-        .btn-back{{background:#1a3d1a;color:white;padding:10px 20px;border-radius:5px;text-decoration:none;display:inline-block;margin-top:20px}}
-        .footer{{background:#0d260d;color:white;text-align:center;padding:30px;margin-top:40px}}
+        .nav a{{color:white;margin:0 15px;text-decoration:none;font-size:13px}}
+        .nav a:hover{{color:#D4A017}}
+        .container{{max-width:780px;margin:30px auto;padding:0 20px}}
+        .article-card{{background:white;border-radius:12px;padding:40px;box-shadow:0 4px 15px rgba(0,0,0,.1)}}
+        .urgent-article-banner{{background:#c0392b;color:white;padding:10px 16px;border-radius:6px;margin-bottom:16px;font-weight:bold;font-size:13px}}
+        .correction-banner{{background:#fff3cd;border-left:4px solid #ffc107;padding:12px 16px;margin-bottom:16px;border-radius:0 6px 6px 0;font-size:14px}}
+        .badges{{display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap}}
+        .badge-cat{{background:#1a3d1a;color:white;padding:3px 12px;border-radius:12px;font-size:11px;text-decoration:none}}
+        .badge-cat:hover{{background:#2C5F2D}}
+        .badge-label{{padding:3px 10px;border-radius:12px;font-size:10px;font-weight:bold;color:white}}
+        h1{{font-size:28px;color:#1a3d1a;margin:0 0 16px;line-height:1.3}}
+        .article-meta{{color:#888;font-size:13px;border-bottom:1px solid #eee;padding-bottom:14px;margin-bottom:24px}}
+        .article-meta span{{margin-right:14px}}
+        .article-content{{line-height:1.9;font-size:17px;color:#333}}
+        .article-content p{{margin-bottom:18px}}
+        .btn-original{{display:block;background:#D4A017;color:#1a3d1a;padding:14px 24px;border-radius:8px;text-decoration:none;font-weight:bold;font-size:15px;text-align:center;margin:28px 0 10px;transition:background .2s}}
+        .btn-original:hover{{background:#c49015}}
+        .btn-back{{color:#1a3d1a;text-decoration:none;font-size:14px;display:inline-block;margin-top:10px}}
+        .btn-back:hover{{text-decoration:underline}}
+        .source-note{{background:#f0f0e8;border-radius:8px;padding:14px;font-size:13px;color:#666;margin-top:20px}}
+        .footer{{background:#0d260d;color:white;text-align:center;padding:24px;margin-top:40px;font-size:13px}}
+        @media(max-width:600px){{.article-card{{padding:24px}}h1{{font-size:22px}}}}
     </style>
     </head>
     <body>
-        <div class="header"><h1>{NEWSPAPER_NAME}</h1></div>
-        <div class="nav"><a href="/">Home</a><a href="/news">News</a><a href="/events">Events</a><a href="/classifieds">Classifieds</a></div>
-        <div class="container">
-            <div><span class="article-category">{article['category']}</span></div>
-            <h1 class="article-title">{article['title']}</h1>
-            <div class="article-meta">
-                <i class="fas fa-calendar-alt"></i> {str(article['date'])[:10] if article['date'] else "Recent"} |
-                <i class="fas fa-user"></i> {article['author']} | 
-                <i class="fas fa-newspaper"></i> {article['source']}
+    <div class="header"><h1 style="font-size:22px;margin:0">{NEWSPAPER_NAME}</h1></div>
+    <div class="nav">
+        <a href="/"><i class="fas fa-home"></i> Home</a>
+        <a href="/news"><i class="fas fa-newspaper"></i> News</a>
+        <a href="/events"><i class="fas fa-calendar"></i> Events</a>
+        <a href="/classifieds"><i class="fas fa-list"></i> Classifieds</a>
+    </div>
+    <div class="container">
+        <div class="article-card">
+            {urgent_banner}
+            {correction_banner}
+            <div class="badges">
+                <a href="/category/{article["category"] or "News"}" class="badge-cat">{article["category"] or "News"}</a>
+                <span class="badge-label" style="background:{label_color}">{label}</span>
             </div>
+            <h1>{article["title"]}</h1>
+            <div class="article-meta">
+                <span><i class="fas fa-calendar-alt"></i> {str(article["date"])[:10] if article["date"] else "Recent"}</span>
+                <span><i class="fas fa-newspaper"></i> {article["source"]}</span>
+                <span><i class="fas fa-eye"></i> {article["views"]} views</span>
+            </div>
+            {original_btn}
             <div class="article-content">{formatted_content}</div>
-            <a href="/news" class="btn-back">← Back to News</a>
+            {original_btn}
+            <div class="source-note">
+                <i class="fas fa-info-circle"></i>
+                This is a summary. For the complete story, use the button above to read the full article at <strong>{article["source"]}</strong>.
+            </div>
+            <a href="/news" class="btn-back"><i class="fas fa-arrow-left"></i> Back to News</a>
         </div>
-        <div class="footer"><p>© {datetime.now().year} {NEWSPAPER_NAME}</p></div>
-    </body>
-    </html>
-    '''
+    </div>
+    <div class="footer">© {datetime.now().year} {NEWSPAPER_NAME}</div>
+    </body></html>'''
 
 @app.route('/events')
 def events_list():

@@ -274,7 +274,13 @@ def run_scraper():
             if not summary or not body:
                 continue
 
-            urgent  = any(k in (title + desc).lower() for k in ['emergency', 'evacuation', 'fire', 'missing person'])
+            text_lc = (title + ' ' + desc).lower()
+            urgent  = any(k in text_lc for k in [
+                'emergency alert', 'mandatory evacuation', 'evacuation order',
+                'wildfire emergency', 'missing person', 'amber alert',
+                'flood warning', 'active shooter', 'shelter in place',
+                'boil water advisory',
+            ])
             expires = (datetime.utcnow().date() + timedelta(days=3)).isoformat()
 
             cursor.execute(
