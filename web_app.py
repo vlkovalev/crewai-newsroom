@@ -287,27 +287,38 @@ def get_regional_news(category, limit=4):
 def get_top_stories():
     conn = get_db()
     cursor = conn.cursor()
+    # Fetch more than needed so we can enforce per-category cap after sorting
     cursor.execute(
         """SELECT id, title, summary, source, date, category, views,
                   coalesce(score,50) AS score, source_label, story_type
            FROM news_articles
            WHERE active = TRUE AND urgent = FALSE
-             AND coalesce(score,50) >= 70
-             AND date >= NOW() - INTERVAL '48 hours'
+             AND coalesce(score,50) >= 60
+             AND date >= NOW() - INTERVAL '72 hours'
              AND (expires_from_front IS NULL OR expires_from_front >= CURRENT_DATE)
            ORDER BY pinned DESC, score DESC, date DESC
-           LIMIT 5"""
+           LIMIT 20"""
     )
-    articles = cursor.fetchall()
+    rows = cursor.fetchall()
     conn.close()
-    return [dict(a) for a in articles]
+    # Enforce diversity: max 2 per category, 5 total
+    seen_cats = {}
+    result = []
+    for row in rows:
+        cat = row['category'] or 'News'
+        if seen_cats.get(cat, 0) < 2:
+            result.append(dict(row))
+            seen_cats[cat] = seen_cats.get(cat, 0) + 1
+        if len(result) == 5:
+            break
+    return result
 
 def get_article_by_id(article_id):
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute(
         """SELECT id, title, content, summary, source, author, date, category,
-                  url, source_label, correction, urgent
+                  url, source_label, correction, urgent, views, score
            FROM news_articles WHERE id = %s AND active = TRUE""",
         (article_id,)
     )
@@ -439,7 +450,7 @@ def home():
         forecast = get_weather_forecast()
         events = get_events(6)
         businesses = get_businesses(3)
-        news_articles = get_news_articles(6)
+        news_articles = get_news_articles(12)
         urgent_articles = get_urgent_articles()
         top_stories = get_top_stories()
         edmonton_news = get_regional_news('Edmonton Area', 4)
@@ -493,7 +504,7 @@ def home():
         for a in news_articles:
             if a["id"] in top_ids:
                 continue
-            if shown >= 3:
+            if shown >= 6:
                 break
             news_html += f'<div class="news-item"><div class="news-category">{a["category"]}</div><h3><a href="/article/{a["id"]}">{a["title"]}</a></h3><div class="news-meta"><i class="fas fa-calendar-alt"></i> {str(a["date"])[:10] if a["date"] else "Recent"}</div><p>{(a["summary"] or "")[:150]}...</p><a href="/article/{a["id"]}" class="read-more">Read Full Story →</a></div>'
             shown += 1
