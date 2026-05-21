@@ -243,7 +243,9 @@ def get_news_articles(limit=10):
                   coalesce(score,50) - EXTRACT(EPOCH FROM (NOW()-date))/7200 AS eff_score,
                   urgent, pinned, story_type, source_label, correction
            FROM news_articles
-           WHERE active = TRUE AND (expires_from_front IS NULL OR expires_from_front >= CURRENT_DATE)
+           WHERE active = TRUE
+             AND (expires_from_front IS NULL OR expires_from_front >= CURRENT_DATE)
+             AND date >= NOW() - INTERVAL '7 days'
            ORDER BY pinned DESC, eff_score DESC, date DESC
            LIMIT %s""",
         (limit,)

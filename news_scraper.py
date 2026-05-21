@@ -226,6 +226,18 @@ def summarize_with_openai(title, desc, source_name, openai_key):
         return '', ''
 
 
+MAX_PER_SOURCE = 5   # articles added per source per run
+MAX_TOTAL       = 30  # hard cap per full scraper run
+
+
+def _title_words(title):
+    """Return significant words from a title for fuzzy dedup."""
+    stop = {'the','a','an','in','on','at','to','for','of','and','or','is','are',
+            'was','were','after','with','from','by','as','it','its','be','has',
+            'have','had','that','this','not','no','will','would','could','also'}
+    return {w for w in title.lower().split() if len(w) > 3 and w not in stop}
+
+
 def run_scraper():
     openai_key = os.environ.get('OPENAI_API_KEY', '')
     if not openai_key:
@@ -237,11 +249,24 @@ def run_scraper():
     now_str = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
     published = 0
 
+    # Load recent titles once for fuzzy dedup (avoids per-article DB round-trip)
+    cursor.execute(
+        "SELECT title FROM news_articles WHERE date >= NOW() - INTERVAL '2 days'"
+    )
+    recent_titles = [r['title'] for r in cursor.fetchall()]
+    recent_wordsets = [_title_words(t) for t in recent_titles]
+
     for src in RSS_SOURCES:
         print(f'[SCRAPER] Checking {src["name"]}...')
         items = fetch_rss(src['url'])
+        added_this_source = 0
 
-        for item in items[:30]:
+        for item in items[:20]:
+            if published >= MAX_TOTAL:
+                break
+            if added_this_source >= MAX_PER_SOURCE:
+                break
+
             title = item['title']
             desc  = item['desc']
 
@@ -250,12 +275,14 @@ def run_scraper():
             if not src.get('always_local') and not is_local(title, desc):
                 continue
 
-            # Deduplicate: skip if same title published in last 48h
-            cursor.execute(
-                "SELECT id FROM news_articles WHERE title=%s AND date >= NOW() - INTERVAL '2 days'",
-                (title,)
-            )
-            if cursor.fetchone():
+            # Exact-title dedup
+            if title in recent_titles:
+                continue
+
+            # Fuzzy dedup: skip if 4+ significant words overlap with a recent title
+            new_words = _title_words(title)
+            if new_words and any(len(new_words & ws) >= 4 for ws in recent_wordsets):
+                print(f'[SKIP-DUPE] {title[:60]}')
                 continue
 
             score    = score_article(title, desc, src['reliability'])
@@ -301,6 +328,10 @@ def run_scraper():
                  title, summary, body)
             )
             published += 1
+            added_this_source += 1
+            # Add to in-memory dedup list so later sources don't re-add same story
+            recent_titles.append(title)
+            recent_wordsets.append(_title_words(title))
             print(f'[OK] {src["name"]}: {title[:70]} (score={score})')
 
     conn.commit()
