@@ -20,73 +20,100 @@ from xml.etree import ElementTree as ET
 OPENAI_URL = 'https://api.openai.com/v1/chat/completions'
 
 RSS_SOURCES = [
-    # ── Google News targeted searches (always have local content) ──
+    # ── Google News targeted searches — guaranteed local content ──
     {
         'name': 'Google News – Spruce Grove',
-        'url': 'https://news.google.com/rss/search?q=Spruce+Grove+Alberta&hl=en-CA&gl=CA&ceid=CA:en',
-        'reliability': 4,
-        'label': 'Media',
-        'category': None,
-        'always_local': True,   # skip keyword filter — already targeted
+        'url': 'https://news.google.com/rss/search?q=%22Spruce+Grove%22+Alberta&hl=en-CA&gl=CA&ceid=CA:en',
+        'reliability': 4, 'label': 'Media', 'category': None, 'always_local': True,
     },
     {
         'name': 'Google News – Parkland County',
-        'url': 'https://news.google.com/rss/search?q=Parkland+County+Alberta&hl=en-CA&gl=CA&ceid=CA:en',
-        'reliability': 4,
-        'label': 'Media',
-        'category': None,
-        'always_local': True,
+        'url': 'https://news.google.com/rss/search?q=%22Parkland+County%22+Alberta&hl=en-CA&gl=CA&ceid=CA:en',
+        'reliability': 4, 'label': 'Media', 'category': None, 'always_local': True,
     },
     {
         'name': 'Google News – Stony Plain',
-        'url': 'https://news.google.com/rss/search?q=Stony+Plain+Alberta&hl=en-CA&gl=CA&ceid=CA:en',
-        'reliability': 4,
-        'label': 'Media',
-        'category': None,
-        'always_local': True,
-    },
-    # ── Regional outlets (keyword-filtered) ──
-    {
-        'name': 'CBC Edmonton',
-        'url': 'https://www.cbc.ca/cmlink/rss-canada-edmonton',
-        'reliability': 5,
-        'label': 'Media',
-        'category': None,
-        'always_local': False,
+        'url': 'https://news.google.com/rss/search?q=%22Stony+Plain%22+Alberta&hl=en-CA&gl=CA&ceid=CA:en',
+        'reliability': 4, 'label': 'Media', 'category': None, 'always_local': True,
     },
     {
-        'name': 'Edmonton Journal',
-        'url': 'https://edmontonjournal.com/feed/',
-        'reliability': 4,
-        'label': 'Media',
-        'category': None,
-        'always_local': False,
+        'name': 'Google News – Spruce Grove RCMP',
+        'url': 'https://news.google.com/rss/search?q=%22Spruce+Grove%22+RCMP&hl=en-CA&gl=CA&ceid=CA:en',
+        'reliability': 5, 'label': 'Official', 'category': 'Public Safety', 'always_local': True,
+    },
+    # ── Official government & public sources ──
+    {
+        'name': 'City of Spruce Grove',
+        'url': 'https://www.sprucegrove.org/city-services/newsroom/rss/',
+        'reliability': 5, 'label': 'Official', 'category': 'News', 'always_local': True,
     },
     {
-        'name': 'CTV Edmonton',
-        'url': 'https://edmonton.ctvnews.ca/rss/ctvnews-ca-edmonton-1.822430',
-        'reliability': 4,
-        'label': 'Media',
-        'category': None,
-        'always_local': False,
+        'name': 'Parkland County News',
+        'url': 'https://www.parklandcounty.com/en/news/rss.aspx',
+        'reliability': 5, 'label': 'Official', 'category': 'News', 'always_local': True,
     },
     {
         'name': 'Government of Alberta',
         'url': 'https://www.alberta.ca/rss/news.xml',
-        'reliability': 5,
-        'label': 'Official',
-        'category': 'News',
-        'always_local': False,
+        'reliability': 5, 'label': 'Official', 'category': 'News', 'always_local': False,
     },
     {
-        'name': 'Parkland County',
-        'url': 'https://www.parklandcounty.com/en/news/rss.aspx',
-        'reliability': 5,
-        'label': 'Official',
-        'category': 'News',
-        'always_local': True,
+        'name': 'RCMP Alberta',
+        'url': 'https://news.google.com/rss/search?q=RCMP+Alberta+%22Spruce+Grove%22+OR+%22Parkland%22&hl=en-CA&gl=CA&ceid=CA:en',
+        'reliability': 5, 'label': 'Official', 'category': 'Public Safety', 'always_local': True,
+    },
+    {
+        'name': 'Sturgeon School Division',
+        'url': 'https://news.google.com/rss/search?q=%22Sturgeon+School+Division%22&hl=en-CA&gl=CA&ceid=CA:en',
+        'reliability': 4, 'label': 'Official', 'category': 'Education', 'always_local': True,
+    },
+    {
+        'name': 'Parkland School Division',
+        'url': 'https://news.google.com/rss/search?q=%22Parkland+School+Division%22&hl=en-CA&gl=CA&ceid=CA:en',
+        'reliability': 4, 'label': 'Official', 'category': 'Education', 'always_local': True,
+    },
+    # ── Edmonton & Alberta regional news (separate section on front page) ──
+    {
+        'name': 'CBC Edmonton',
+        'url': 'https://www.cbc.ca/cmlink/rss-canada-edmonton',
+        'reliability': 5, 'label': 'Media', 'category': None,
+        'always_local': False, 'region_scope': 'edmonton',
+    },
+    {
+        'name': 'Edmonton Journal',
+        'url': 'https://edmontonjournal.com/feed/',
+        'reliability': 4, 'label': 'Media', 'category': None,
+        'always_local': False, 'region_scope': 'edmonton',
+    },
+    {
+        'name': 'CTV Edmonton',
+        'url': 'https://edmonton.ctvnews.ca/rss/ctvnews-ca-edmonton-1.822430',
+        'reliability': 4, 'label': 'Media', 'category': None,
+        'always_local': False, 'region_scope': 'edmonton',
+    },
+    {
+        'name': 'Google News – Edmonton',
+        'url': 'https://news.google.com/rss/search?q=Edmonton+Alberta&hl=en-CA&gl=CA&ceid=CA:en',
+        'reliability': 4, 'label': 'Media', 'category': None,
+        'always_local': True, 'region_scope': 'edmonton',
+    },
+    {
+        'name': 'Google News – Alberta',
+        'url': 'https://news.google.com/rss/search?q=Alberta+news&hl=en-CA&gl=CA&ceid=CA:en',
+        'reliability': 4, 'label': 'Media', 'category': None,
+        'always_local': True, 'region_scope': 'alberta',
+    },
+    {
+        'name': 'Government of Alberta – All News',
+        'url': 'https://www.alberta.ca/rss/news.xml',
+        'reliability': 5, 'label': 'Official', 'category': 'News',
+        'always_local': True, 'region_scope': 'alberta',
     },
 ]
+
+# Edmonton/Alberta sources publish to category 'Edmonton Area' or 'Alberta'
+# when region_scope is set and the story is not Spruce Grove specific
+EDMONTON_KEYWORDS = ['edmonton', 'alberta', 'yeg']
 
 LOCAL_KEYWORDS = [
     'spruce grove', 'parkland county', 'stony plain',
@@ -232,7 +259,16 @@ def run_scraper():
                 continue
 
             score    = score_article(title, desc, src['reliability'])
-            category = src.get('category') or auto_category(title, desc)
+            # Route Edmonton/Alberta regional stories to their own category
+            region_scope = src.get('region_scope', 'local')
+            if region_scope == 'edmonton' and not is_local(title, desc):
+                category = 'Edmonton Area'
+                score = max(score - 10, 20)  # slightly lower priority than hyper-local
+            elif region_scope == 'alberta' and not is_local(title, desc):
+                category = 'Alberta'
+                score = max(score - 15, 15)
+            else:
+                category = src.get('category') or auto_category(title, desc)
             summary, body = summarize_with_openai(title, desc, src['name'], openai_key)
 
             if not summary or not body:

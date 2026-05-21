@@ -368,15 +368,10 @@ def _job_maintenance():
 if os.environ.get('SCHEDULER_ENABLED', '0') == '1':
     scheduler = BackgroundScheduler(timezone='UTC')
 
-    # AI article generation — 3× daily
-    scheduler.add_job(_job_ai_generation, CronTrigger(hour=7,  minute=0),  id='ai_morning',  replace_existing=True)
-    scheduler.add_job(_job_ai_generation, CronTrigger(hour=13, minute=0),  id='ai_noon',     replace_existing=True)
-    scheduler.add_job(_job_ai_generation, CronTrigger(hour=23, minute=0),  id='ai_evening',  replace_existing=True)
-
-    # RSS scraping — 3× daily (offset from AI runs so they don't overlap)
-    scheduler.add_job(_job_rss_scraper,   CronTrigger(hour=13, minute=30), id='rss_morning', replace_existing=True)
-    scheduler.add_job(_job_rss_scraper,   CronTrigger(hour=18, minute=0),  id='rss_noon',    replace_existing=True)
-    scheduler.add_job(_job_rss_scraper,   CronTrigger(hour=23, minute=30), id='rss_evening', replace_existing=True)
+    # RSS scraping — 3× daily from real sources only (no AI-generated content)
+    scheduler.add_job(_job_rss_scraper,   CronTrigger(hour=9,  minute=0),  id='rss_morning', replace_existing=True)
+    scheduler.add_job(_job_rss_scraper,   CronTrigger(hour=15, minute=0),  id='rss_afternoon',replace_existing=True)
+    scheduler.add_job(_job_rss_scraper,   CronTrigger(hour=20, minute=0),  id='rss_evening', replace_existing=True)
 
     # Nightly maintenance — 11 PM MDT
     scheduler.add_job(_job_maintenance,   CronTrigger(hour=5,  minute=0),  id='maintenance', replace_existing=True)
@@ -1956,7 +1951,8 @@ def api_events():
 # ─────────────────────────────────────────
 
 VALID_CATEGORIES = {'News', 'Community', 'Sports', 'Business', 'Arts & Culture',
-                    'Public Safety', 'Events', 'Health', 'Education', 'Opinion'}
+                    'Public Safety', 'Events', 'Health', 'Education', 'Opinion',
+                    'Edmonton Area', 'Alberta'}
 
 @app.route('/api/publish-article', methods=['POST'])
 def api_publish_article():

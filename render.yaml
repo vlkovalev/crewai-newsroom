@@ -37,14 +37,14 @@ services:
       - key: GA_MEASUREMENT_ID
         sync: false
 
-  # Morning cron — AI articles + RSS scraping (7 AM MDT = 13:00 UTC)
+  # Morning cron — RSS scraping only, real sources (7 AM MDT = 13:00 UTC)
   - type: cron
     name: spruce-grove-news-bot
     env: python
     region: oregon
     plan: starter
     buildCommand: pip install -r requirements.txt
-    startCommand: python news_crew_enhanced.py && python news_scraper.py
+    startCommand: python news_scraper.py
     schedule: "0 13 * * *"
     envVars:
       - key: PYTHON_VERSION
@@ -60,14 +60,14 @@ services:
       - key: OPENAI_API_KEY
         sync: false
 
-  # Evening cron — second AI batch + RSS (5 PM MDT = 23:00 UTC)
+  # Evening cron — RSS scraping only (5 PM MDT = 23:00 UTC)
   - type: cron
     name: spruce-grove-evening-bot
     env: python
     region: oregon
     plan: starter
     buildCommand: pip install -r requirements.txt
-    startCommand: python news_crew_enhanced.py && python news_scraper.py
+    startCommand: python news_scraper.py
     schedule: "0 23 * * *"
     envVars:
       - key: PYTHON_VERSION
