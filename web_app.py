@@ -92,6 +92,25 @@ def init_database():
         id SERIAL PRIMARY KEY, email TEXT UNIQUE, phone TEXT,
         date_blocked TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
 
+    known_spam_phones = ('096272068642', '633202804530')
+    cursor.execute(
+        """UPDATE businesses
+           SET approved = FALSE
+           WHERE phone IN %s
+              OR name ILIKE '%%BALANCE-36824-US-DOLLARS%%'
+              OR description ILIKE '%%BALANCE-36824-US-DOLLARS%%'""",
+        (known_spam_phones,)
+    )
+    for phone in known_spam_phones:
+        cursor.execute(
+            """INSERT INTO blocked_posters (phone)
+               SELECT %s
+               WHERE NOT EXISTS (
+                   SELECT 1 FROM blocked_posters WHERE phone = %s
+               )""",
+            (phone, phone)
+        )
+
     for sql in [
         "ALTER TABLE events ADD COLUMN IF NOT EXISTS recurring TEXT",
         "ALTER TABLE events ADD COLUMN IF NOT EXISTS expiry_date DATE",
