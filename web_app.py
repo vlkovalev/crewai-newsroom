@@ -5,8 +5,10 @@ import requests
 import json
 import traceback
 import random
+from functools import wraps
+from html import escape
 from datetime import datetime, date, timedelta
-from flask import Flask, request, jsonify, redirect, render_template_string
+from flask import Flask, request, jsonify, redirect, render_template_string, session
 from werkzeug.utils import secure_filename
 # Add these lines
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -85,6 +87,10 @@ def init_database():
         id SERIAL PRIMARY KEY, email TEXT, name TEXT,
         amount INTEGER, tier TEXT, transaction_id TEXT,
         payment_date DATE, status TEXT DEFAULT 'completed')''')
+
+    cursor.execute('''CREATE TABLE IF NOT EXISTS blocked_posters (
+        id SERIAL PRIMARY KEY, email TEXT UNIQUE, phone TEXT,
+        date_blocked TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
 
     for sql in [
         "ALTER TABLE events ADD COLUMN IF NOT EXISTS recurring TEXT",
@@ -355,6 +361,86 @@ def get_db():
     if url.startswith('postgres://'):
         url = url.replace('postgres://', 'postgresql://', 1)
     return psycopg2.connect(url, cursor_factory=psycopg2.extras.RealDictCursor)
+
+def clean_email(value):
+    return (value or '').strip().lower()
+
+def clean_text(value):
+    return (value or '').strip()
+
+def split_contact_identifier(contact):
+    contact = clean_text(contact)
+    if not contact:
+        return '', ''
+    if '@' in contact:
+        return clean_email(contact), ''
+    return '', contact
+
+def is_blocked_poster(cursor, email='', phone='', contact=''):
+    email = clean_email(email)
+    phone = clean_text(phone)
+    contact_email, contact_phone = split_contact_identifier(contact)
+    email_checks = [value for value in [email, contact_email] if value]
+    phone_checks = [value for value in [phone, contact_phone] if value]
+    if not email_checks and not phone_checks:
+        return False
+
+    clauses = []
+    params = []
+    if email_checks:
+        placeholders = ', '.join(['%s'] * len(email_checks))
+        clauses.append(f"lower(coalesce(email, '')) IN ({placeholders})")
+        params.extend(email_checks)
+    if phone_checks:
+        placeholders = ', '.join(['%s'] * len(phone_checks))
+        clauses.append(f"coalesce(phone, '') IN ({placeholders})")
+        params.extend(phone_checks)
+
+    cursor.execute(f"SELECT id FROM blocked_posters WHERE {' OR '.join(clauses)} LIMIT 1", params)
+    return cursor.fetchone() is not None
+
+def block_poster(cursor, email='', phone=''):
+    email = clean_email(email)
+    phone = clean_text(phone)
+    if not email and not phone:
+        return
+
+    cursor.execute(
+        """SELECT id FROM blocked_posters
+           WHERE (%s <> '' AND lower(coalesce(email, '')) = %s)
+              OR (%s <> '' AND coalesce(phone, '') = %s)
+           LIMIT 1""",
+        (email, email, phone, phone)
+    )
+    existing = cursor.fetchone()
+    if existing:
+        cursor.execute(
+            """UPDATE blocked_posters
+               SET email = COALESCE(NULLIF(%s, ''), email),
+                   phone = COALESCE(NULLIF(%s, ''), phone)
+               WHERE id = %s""",
+            (email, phone, existing['id'])
+        )
+        return
+
+    cursor.execute(
+        """INSERT INTO blocked_posters (email, phone)
+           VALUES (NULLIF(%s, ''), NULLIF(%s, ''))
+           ON CONFLICT (email) DO UPDATE
+           SET phone = COALESCE(NULLIF(EXCLUDED.phone, ''), blocked_posters.phone)""",
+        (email, phone)
+    )
+
+def admin_required(fn):
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        if not session.get('admin_logged_in'):
+            return redirect('/admin/login')
+        return fn(*args, **kwargs)
+    return wrapper
+
+def h(value):
+    return escape(str(value if value is not None else ''))
 
 # Initialize database
 init_database()
@@ -680,7 +766,6 @@ def home():
                 <a href="/business-directory"><i class="fas fa-store"></i> BUSINESSES</a>
                 <a href="/foodbank"><i class="fas fa-hand-holding-heart"></i> FOOD BANK</a>
                 <a href="/advertise"><i class="fas fa-bullhorn"></i> ADVERTISE</a>
-                <a href="/support" style="background:#D4A017;color:#1a3d1a;padding:5px 12px;border-radius:20px;"><i class="fas fa-star"></i> SUPPORT</a>
             </div>
             {urgent_section}
             <div class="hero">
@@ -722,7 +807,7 @@ def home():
                 <div class="featured-article">
                     <div class="featured-badge"><i class="fas fa-star"></i> Welcome to {NEWSPAPER_NAME}</div>
                     <h2>Your Community Newspaper</h2>
-                    <p>Welcome to The Spruce Grove Gazette - your source for local news, events, classifieds, and community information. Post your classified ads, create events, share news tips, and support local journalism.</p>
+                    <p>Welcome to The Spruce Grove Gazette - your source for local news, events, classifieds, and community information. Post your classified ads, create events, and share news tips with the newsroom.</p>
                     <a href="/subscribe" class="btn"><i class="fas fa-envelope"></i> Subscribe to Newsletter →</a>
                 </div>
                 
@@ -804,7 +889,6 @@ def home():
                     <div class="footer-column">
                         <h4><i class="fas fa-hand-holding-heart"></i> Community</h4>
                         <a href="/foodbank">Parkland Food Bank</a>
-                        <a href="/support">Become a Supporter</a>
                         <a href="/events">Community Calendar</a>
                     </div>
                     <div class="footer-column">
@@ -872,7 +956,7 @@ def news_index():
     </head>
     <body>
         <div class="header"><h1><i class="fas fa-newspaper"></i> Spruce Grove Gazette News</h1><p>Local news that matters to you</p></div>
-        <div class="nav"><a href="/">Home</a><a href="/events">Events</a><a href="/classifieds">Classifieds</a><a href="/support">Support</a></div>
+        <div class="nav"><a href="/">Home</a><a href="/events">Events</a><a href="/classifieds">Classifieds</a></div>
         <div class="container">
             <h1>Latest News</h1>
             {articles_html}
@@ -1281,14 +1365,22 @@ def classified_detail(id):
 @app.route('/post-ad', methods=['GET', 'POST'])
 def post_ad():
     if request.method == 'POST':
+        category = request.form.get('category')
+        title = request.form.get('title')
+        description = request.form.get('description')
+        price = request.form.get('price')
+        contact = request.form.get('contact', '').strip()
+        email = request.form.get('email', '').strip()
+        phone = request.form.get('phone', '').strip()
+
         expiry_date = date.today() + timedelta(days=30)
         conn = get_db()
         cursor = conn.cursor()
+        active = not is_blocked_poster(cursor, email=email, phone=phone, contact=contact)
+
         cursor.execute('''INSERT INTO classifieds (category, title, description, price, contact, email, phone, date, expiry_date, active)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE)''',
-                      (request.form.get('category'), request.form.get('title'), request.form.get('description'),
-                       request.form.get('price'), request.form.get('contact'), request.form.get('email'),
-                       request.form.get('phone'), date.today(), expiry_date))
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)''',
+                      (category, title, description, price, contact, email, phone, date.today(), expiry_date, active))
         conn.commit()
         conn.close()
         return '<h1>✅ Ad Posted! Expires in 30 days.</h1><a href="/classifieds">View Classifieds</a>'
@@ -1335,7 +1427,7 @@ def foodbank():
     </head>
     <body>
         <div class="header"><h1><i class="fas fa-hand-holding-heart"></i> Parkland Food Bank</h1><p>Nourishing Our Community Since 1984</p></div>
-        <div class="nav"><a href="/">Home</a><a href="/news">News</a><a href="/events">Events</a><a href="/support">Support</a></div>
+        <div class="nav"><a href="/">Home</a><a href="/news">News</a><a href="/events">Events</a></div>
         <div class="stats-bar">
             <div><div class="stat-number">40+</div>Years of Service</div>
             <div><div class="stat-number">5,634</div>Individuals Served</div>
@@ -1634,7 +1726,7 @@ def advertise():
                 </form>
             </div>
         </div>
-        <div class="footer"><p><a href="/" style="color:white;">← Back to Home</a> | <a href="/support" style="color:#D4A017;">Support the Gazette</a></p></div>
+        <div class="footer"><p><a href="/" style="color:white;">← Back to Home</a></p></div>
     </body>
     </html>
     '''
@@ -1885,7 +1977,7 @@ def business_directory():
     conn = get_db()
     cursor = conn.cursor()
     try:
-        cursor.execute("SELECT * FROM businesses ORDER BY name ASC")
+        cursor.execute("SELECT * FROM businesses WHERE approved = TRUE ORDER BY name ASC")
         businesses = cursor.fetchall()
     except Exception:
         businesses = []
@@ -1959,9 +2051,10 @@ def submit_business():
             try:
                 conn = get_db()
                 cursor = conn.cursor()
-                cursor.execute('''INSERT INTO businesses (name, category, description, phone, email, website, address, date)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s)''',
-                    (name, category, description, phone, email, website, address, datetime.now().date().isoformat()))
+                approved = not is_blocked_poster(cursor, email=email, phone=phone)
+                cursor.execute('''INSERT INTO businesses (name, category, description, phone, email, website, address, date, approved)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)''',
+                    (name, category, description, phone, email, website, address, datetime.now().date().isoformat(), approved))
                 conn.commit()
                 conn.close()
             except Exception as e:
@@ -2016,6 +2109,217 @@ def submit_business():
 # ─────────────────────────────────────────
 # API Routes
 # ─────────────────────────────────────────
+
+@app.route('/admin')
+@admin_required
+def admin_home():
+    return redirect('/admin/moderation')
+
+@app.route('/admin/login', methods=['GET', 'POST'])
+def admin_login():
+    error = ''
+    if request.method == 'POST':
+        password = request.form.get('password', '')
+        expected = os.environ.get('ADMIN_PASSWORD', 'admin123')
+        if password == expected:
+            session['admin_logged_in'] = True
+            return redirect('/admin/moderation')
+        error = '<div class="error">Incorrect password. Please try again.</div>'
+
+    return f'''<!DOCTYPE html><html><head><meta charset="UTF-8">
+    <title>Admin Login - {NEWSPAPER_NAME}</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+    body{{font-family:Georgia,'Times New Roman',serif;background:#f9f9f5;margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;}}
+    .login{{width:100%;max-width:420px;background:white;border:1px solid #eadfbd;border-top:6px solid #D4A017;border-radius:8px;padding:34px;box-shadow:0 18px 45px rgba(26,61,26,.14);}}
+    h1{{color:#1a3d1a;margin:0 0 8px;font-size:28px;}}
+    p{{color:#5f695f;margin:0 0 24px;line-height:1.45;}}
+    label{{display:block;color:#1a3d1a;font-weight:bold;margin-bottom:8px;}}
+    input{{width:100%;box-sizing:border-box;padding:13px 14px;border:1px solid #d8d0b5;border-radius:6px;font-size:16px;font-family:Georgia;}}
+    button{{width:100%;margin-top:18px;background:#1a3d1a;color:white;border:0;border-radius:6px;padding:13px 16px;font-size:16px;cursor:pointer;font-weight:bold;}}
+    button:hover{{background:#0d260d;}}
+    .error{{background:#fff2f0;color:#9b1c1c;border:1px solid #f3c5bd;border-radius:6px;padding:10px 12px;margin-bottom:16px;}}
+    a{{display:block;text-align:center;margin-top:18px;color:#1a3d1a;text-decoration:none;}}
+    </style></head><body>
+    <form class="login" method="POST">
+      <h1><i class="fas fa-shield-alt"></i> Gazette Admin</h1>
+      <p>Sign in to review classifieds, business listings, and blocked posters.</p>
+      {error}
+      <label for="password">Admin password</label>
+      <input id="password" type="password" name="password" autofocus required>
+      <button type="submit"><i class="fas fa-lock"></i> Sign In</button>
+      <a href="/">Back to Gazette</a>
+    </form></body></html>'''
+
+@app.route('/admin/logout')
+def admin_logout():
+    session.clear()
+    return redirect('/')
+
+@app.route('/admin/moderation')
+@admin_required
+def admin_moderation():
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("""SELECT id, category, title, description, price, contact, email, phone, date, active
+                      FROM classifieds ORDER BY date DESC, id DESC LIMIT 250""")
+    classifieds_rows = cursor.fetchall()
+    cursor.execute("""SELECT id, name, category, description, address, phone, email, website, date, approved
+                      FROM businesses ORDER BY date DESC NULLS LAST, id DESC LIMIT 250""")
+    business_rows = cursor.fetchall()
+    cursor.execute("SELECT id, email, phone, date_blocked FROM blocked_posters ORDER BY date_blocked DESC, id DESC")
+    blocked_rows = cursor.fetchall()
+    conn.close()
+
+    classifieds_html = ''.join([f'''
+      <tr>
+        <td><strong>{h(c["title"])}</strong><span>{h(c["category"] or "General")}</span><small>{h((c["description"] or "")[:120])}</small></td>
+        <td>{h(c["price"] or "Call for price")}</td>
+        <td><span>{h(c["contact"])}</span><small>{h(c["email"])}</small><small>{h(c["phone"])}</small></td>
+        <td><span class="pill {'ok' if c["active"] else 'muted'}">{'Active' if c["active"] else 'Hidden'}</span></td>
+        <td class="actions">
+          <form method="POST" action="/admin/classifieds/{c["id"]}/deactivate"><button type="submit"><i class="fas fa-eye-slash"></i> Deactivate</button></form>
+          <form method="POST" action="/admin/classifieds/{c["id"]}/deactivate-block"><button class="danger" type="submit"><i class="fas fa-ban"></i> Block</button></form>
+        </td>
+      </tr>''' for c in classifieds_rows]) or '<tr><td colspan="5" class="empty">No classified ads found.</td></tr>'
+
+    businesses_html = ''.join([f'''
+      <tr>
+        <td><strong>{h(b["name"])}</strong><span>{h(b["category"] or "Uncategorized")}</span><small>{h((b["description"] or "")[:120])}</small></td>
+        <td><span>{h(b["address"])}</span><small>{h(b["website"])}</small></td>
+        <td><small>{h(b["email"])}</small><small>{h(b["phone"])}</small></td>
+        <td><span class="pill {'ok' if b["approved"] else 'muted'}">{'Approved' if b["approved"] else 'Hidden'}</span></td>
+        <td class="actions">
+          <form method="POST" action="/admin/businesses/{b["id"]}/unapprove"><button type="submit"><i class="fas fa-eye-slash"></i> Unapprove</button></form>
+          <form method="POST" action="/admin/businesses/{b["id"]}/unapprove-block"><button class="danger" type="submit"><i class="fas fa-ban"></i> Block</button></form>
+        </td>
+      </tr>''' for b in business_rows]) or '<tr><td colspan="5" class="empty">No business listings found.</td></tr>'
+
+    blocked_html = ''.join([f'''
+      <tr>
+        <td>{h(p["email"] or "-")}</td>
+        <td>{h(p["phone"] or "-")}</td>
+        <td>{h(p["date_blocked"])}</td>
+        <td class="actions"><form method="POST" action="/admin/blocked/{p["id"]}/unblock"><button type="submit"><i class="fas fa-unlock"></i> Unblock</button></form></td>
+      </tr>''' for p in blocked_rows]) or '<tr><td colspan="4" class="empty">No blocked posters yet.</td></tr>'
+
+    return f'''<!DOCTYPE html><html><head><meta charset="UTF-8">
+    <title>Moderation - {NEWSPAPER_NAME}</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+    *{{box-sizing:border-box;}}
+    body{{font-family:Georgia,'Times New Roman',serif;background:#f9f9f5;margin:0;color:#263126;}}
+    header{{background:#1a3d1a;color:white;padding:26px 28px;border-bottom:5px solid #D4A017;}}
+    .top{{max-width:1220px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap;}}
+    h1{{margin:0;font-size:30px;}} header p{{margin:6px 0 0;color:#dbe7d2;}}
+    .logout{{color:#1a3d1a;background:#D4A017;padding:10px 16px;border-radius:6px;text-decoration:none;font-weight:bold;}}
+    main{{max-width:1220px;margin:28px auto;padding:0 20px 50px;}}
+    .stats{{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:24px;}}
+    .stat{{background:white;border:1px solid #eadfbd;border-radius:8px;padding:18px;box-shadow:0 8px 22px rgba(26,61,26,.08);}}
+    .stat strong{{display:block;color:#1a3d1a;font-size:30px;line-height:1;}} .stat span{{color:#697369;font-size:13px;}}
+    .tabs{{display:flex;gap:10px;flex-wrap:wrap;margin:8px 0 20px;position:sticky;top:0;background:#f9f9f5;padding:10px 0;z-index:3;}}
+    .tabs a{{background:white;color:#1a3d1a;border:1px solid #eadfbd;border-radius:6px;padding:10px 14px;text-decoration:none;font-weight:bold;}}
+    section{{background:white;border:1px solid #eadfbd;border-radius:8px;margin:20px 0 28px;box-shadow:0 10px 26px rgba(26,61,26,.08);overflow:hidden;}}
+    .section-head{{padding:18px 20px;border-bottom:1px solid #efe7ce;display:flex;justify-content:space-between;gap:14px;align-items:center;flex-wrap:wrap;}}
+    h2{{margin:0;color:#1a3d1a;font-size:22px;}} .hint{{color:#6b756b;font-size:13px;}}
+    .table-wrap{{overflow-x:auto;}} table{{width:100%;border-collapse:collapse;min-width:860px;}}
+    th{{background:#f3eedf;color:#1a3d1a;text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.5px;padding:12px 14px;}}
+    td{{border-top:1px solid #f0ead8;padding:14px;vertical-align:top;}} td strong,td span,td small{{display:block;}} td small{{color:#697369;margin-top:4px;line-height:1.35;}}
+    .pill{{display:inline-block;padding:5px 10px;border-radius:999px;font-size:12px;font-weight:bold;}} .pill.ok{{background:#e7f3e5;color:#1a6d1f;}} .pill.muted{{background:#eee;color:#666;}}
+    .actions{{display:flex;gap:8px;flex-wrap:wrap;min-width:230px;}} form{{margin:0;}}
+    button{{background:#1a3d1a;color:white;border:0;border-radius:6px;padding:9px 11px;cursor:pointer;font-family:Georgia;font-size:13px;white-space:nowrap;}}
+    button:hover{{background:#0d260d;}} button.danger{{background:#9b1c1c;}} button.danger:hover{{background:#741111;}}
+    .block-form{{display:grid;grid-template-columns:1fr 1fr auto;gap:10px;padding:18px 20px;border-bottom:1px solid #efe7ce;background:#fffaf0;}}
+    input{{padding:11px 12px;border:1px solid #d8d0b5;border-radius:6px;font-family:Georgia;font-size:14px;min-width:0;}}
+    .empty{{text-align:center;color:#7b837b;padding:30px;}}
+    @media(max-width:760px){{.stats{{grid-template-columns:1fr;}} .block-form{{grid-template-columns:1fr;}} header{{padding:22px 18px;}} h1{{font-size:24px;}} main{{padding:0 12px 35px;}}}}
+    </style></head><body>
+    <header><div class="top"><div><h1><i class="fas fa-shield-halved"></i> Moderation Dashboard</h1><p>Remove spam, block repeat posters, and keep public listings clean.</p></div><a class="logout" href="/admin/logout"><i class="fas fa-right-from-bracket"></i> Logout</a></div></header>
+    <main>
+      <div class="stats">
+        <div class="stat"><strong>{len(classifieds_rows)}</strong><span>Recent classified ads</span></div>
+        <div class="stat"><strong>{len(business_rows)}</strong><span>Recent business listings</span></div>
+        <div class="stat"><strong>{len(blocked_rows)}</strong><span>Blocked posters</span></div>
+      </div>
+      <nav class="tabs"><a href="#classifieds"><i class="fas fa-list"></i> Classified Ads</a><a href="#businesses"><i class="fas fa-store"></i> Businesses</a><a href="#blocked"><i class="fas fa-ban"></i> Blocked Posters</a></nav>
+      <section id="classifieds"><div class="section-head"><h2>Classified Ads</h2><span class="hint">Deactivate hides an ad. Block also prevents matching future submissions from appearing.</span></div><div class="table-wrap"><table><tr><th>Ad</th><th>Price</th><th>Contact</th><th>Status</th><th>Actions</th></tr>{classifieds_html}</table></div></section>
+      <section id="businesses"><div class="section-head"><h2>Business Directory</h2><span class="hint">Unapproved businesses are removed from the public directory.</span></div><div class="table-wrap"><table><tr><th>Business</th><th>Location/Web</th><th>Contact</th><th>Status</th><th>Actions</th></tr>{businesses_html}</table></div></section>
+      <section id="blocked"><div class="section-head"><h2>Blocked Posters</h2><span class="hint">Manual blocks shadow-ban future classifieds and business submissions.</span></div>
+        <form class="block-form" method="POST" action="/admin/blocked/add"><input type="email" name="email" placeholder="Email to block"><input type="text" name="phone" placeholder="Phone to block"><button type="submit"><i class="fas fa-plus"></i> Add Block</button></form>
+        <div class="table-wrap"><table><tr><th>Email</th><th>Phone</th><th>Date Blocked</th><th>Actions</th></tr>{blocked_html}</table></div>
+      </section>
+    </main></body></html>'''
+
+@app.route('/admin/classifieds/<int:item_id>/deactivate', methods=['POST'])
+@admin_required
+def admin_deactivate_classified(item_id):
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE classifieds SET active = FALSE WHERE id = %s", (item_id,))
+    conn.commit()
+    conn.close()
+    return redirect('/admin/moderation#classifieds')
+
+@app.route('/admin/classifieds/<int:item_id>/deactivate-block', methods=['POST'])
+@admin_required
+def admin_deactivate_block_classified(item_id):
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT email, phone, contact FROM classifieds WHERE id = %s", (item_id,))
+    item = cursor.fetchone()
+    if item:
+        contact_email, contact_phone = split_contact_identifier(item.get('contact'))
+        block_poster(cursor, item.get('email') or contact_email, item.get('phone') or contact_phone)
+        cursor.execute("UPDATE classifieds SET active = FALSE WHERE id = %s", (item_id,))
+    conn.commit()
+    conn.close()
+    return redirect('/admin/moderation#classifieds')
+
+@app.route('/admin/businesses/<int:item_id>/unapprove', methods=['POST'])
+@admin_required
+def admin_unapprove_business(item_id):
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE businesses SET approved = FALSE WHERE id = %s", (item_id,))
+    conn.commit()
+    conn.close()
+    return redirect('/admin/moderation#businesses')
+
+@app.route('/admin/businesses/<int:item_id>/unapprove-block', methods=['POST'])
+@admin_required
+def admin_unapprove_block_business(item_id):
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT email, phone FROM businesses WHERE id = %s", (item_id,))
+    item = cursor.fetchone()
+    if item:
+        block_poster(cursor, item.get('email'), item.get('phone'))
+        cursor.execute("UPDATE businesses SET approved = FALSE WHERE id = %s", (item_id,))
+    conn.commit()
+    conn.close()
+    return redirect('/admin/moderation#businesses')
+
+@app.route('/admin/blocked/add', methods=['POST'])
+@admin_required
+def admin_add_blocked_poster():
+    conn = get_db()
+    cursor = conn.cursor()
+    block_poster(cursor, request.form.get('email'), request.form.get('phone'))
+    conn.commit()
+    conn.close()
+    return redirect('/admin/moderation#blocked')
+
+@app.route('/admin/blocked/<int:poster_id>/unblock', methods=['POST'])
+@admin_required
+def admin_unblock_poster(poster_id):
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM blocked_posters WHERE id = %s", (poster_id,))
+    conn.commit()
+    conn.close()
+    return redirect('/admin/moderation#blocked')
 
 @app.route('/api/public-news')
 def api_public_news():
